@@ -43,7 +43,22 @@ def sample_item():
 @pytest.fixture
 def populated_db(temp_db_path):
     """Create a database with some test items."""
-    db = JsonDB(TestItem, temp_db_path)
+    db = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+    # Add multiple items
+    for i in range(3):
+        item = TestItem(
+            id=uuid.uuid4(), name=f"Item {i}", status=TestStatus.ACTIVE, quantity=i + 1
+        )
+        db.add(item)
+
+    return db
+
+
+@pytest.fixture
+def populated_db_no_pk(temp_db_path):
+    """Create a database without a primary key with some test items."""
+    db = JsonDB(TestItem, temp_db_path)  # No primary key
 
     # Add multiple items
     for i in range(3):
@@ -119,9 +134,28 @@ class TestJsonDB:
             content = json.load(f)
             assert content == []
 
-    def test_add_item(self, temp_db_path, sample_item):
-        """Test adding an item to the database."""
+    def test_init_with_primary_key(self, temp_db_path):
+        """Test initializing a JsonDB with a primary key."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
+        assert db.primary_key == "id"
+
+    def test_init_with_invalid_primary_key(self, temp_db_path):
+        """Test initializing a JsonDB with an invalid primary key."""
+        with pytest.raises(JsonDBException) as exc_info:
+            JsonDB(TestItem, temp_db_path, primary_key="nonexistent_field")
+
+        assert "Primary key 'nonexistent_field' not found in TestItem fields" in str(
+            exc_info.value
+        )
+
+    def test_init_without_primary_key(self, temp_db_path):
+        """Test initializing a JsonDB without a primary key."""
         db = JsonDB(TestItem, temp_db_path)
+        assert db.primary_key is None
+
+    def test_add_item_with_primary_key(self, temp_db_path, sample_item):
+        """Test adding an item to the database."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
         db.add(sample_item)
 
         # Check that the item was added to memory
@@ -136,9 +170,36 @@ class TestJsonDB:
             assert content[0]["id"] == str(sample_item.id)
             assert content[0]["status"] == "pending"  # Serialized as string
 
+    def test_add_item_without_primary_key(self, temp_db_path, sample_item):
+        """Test adding an item to a database without a primary key."""
+        db = JsonDB(TestItem, temp_db_path)  # No primary key
+        db.add(sample_item)
+
+        # Check that the item was added to memory
+        assert len(db.data) == 1
+        assert db.data[0] == sample_item
+
+    def test_add_duplicate_primary_key(self, temp_db_path, sample_item):
+        """Test adding an item with a duplicate primary key."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
+        db.add(sample_item)
+
+        # Try to add another item with the same ID
+        duplicate_item = TestItem(
+            id=sample_item.id,
+            name="Duplicate Item",
+            status=TestStatus.ACTIVE,
+            quantity=10,
+        )
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db.add(duplicate_item)
+
+        assert f"Item with id='{sample_item.id}' already exists" in str(exc_info.value)
+
     def test_add_wrong_type(self, temp_db_path):
         """Test that adding an item of the wrong type raises an exception."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         @dataclass
         class OtherItem:
@@ -150,9 +211,9 @@ class TestJsonDB:
 
         assert "must be of type TestItem" in str(exc_info.value)
 
-    def test_get_item(self, temp_db_path, sample_item):
+    def test_get_item_with_primary_key(self, temp_db_path, sample_item):
         """Test retrieving an item by ID."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
         db.add(sample_item)
 
         # Get the item
@@ -164,9 +225,22 @@ class TestJsonDB:
         assert result.name == sample_item.name
         assert result.status == sample_item.status
 
+    def test_get_item_no_primary_key(self, temp_db_path, sample_item):
+        """Test retrieving an item when no primary key is configured."""
+        db = JsonDB(TestItem, temp_db_path)  # No primary key
+        db.add(sample_item)
+
+        # Try to get an item - should raise an exception
+        with pytest.raises(JsonDBException) as exc_info:
+            db.get(sample_item.id)
+
+        assert "Cannot use get() without a primary key configured" in str(
+            exc_info.value
+        )
+
     def test_get_nonexistent_item(self, temp_db_path):
         """Test retrieving a nonexistent item."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         # Get a nonexistent item
         result = db.get(uuid.uuid4())
@@ -178,6 +252,14 @@ class TestJsonDB:
         """Test finding items by criteria."""
         # Find items with status=ACTIVE
         results = populated_db.find(status=TestStatus.ACTIVE)
+
+        # Check that all items were found (all 3 items have status=ACTIVE)
+        assert len(results) == 3
+
+    def test_find_items_no_primary_key(self, populated_db_no_pk):
+        """Test finding items by criteria when no primary key is configured."""
+        # Find items with status=ACTIVE
+        results = populated_db_no_pk.find(status=TestStatus.ACTIVE)
 
         # Check that all items were found (all 3 items have status=ACTIVE)
         assert len(results) == 3
@@ -199,7 +281,7 @@ class TestJsonDB:
         # Check that no items were found
         assert len(results) == 0
 
-    def test_all_items(self, populated_db):
+    def test_all_items_with_primary_key(self, populated_db):
         """Test retrieving all items."""
         # Get all items
         results = populated_db.all()
@@ -210,9 +292,20 @@ class TestJsonDB:
         # Check that a copy was returned (not the original list)
         assert results is not populated_db.data
 
-    def test_update_item(self, temp_db_path, sample_item):
+    def test_all_items_no_primary_key(self, populated_db_no_pk):
+        """Test retrieving all items when no primary key is configured."""
+        # Get all items
+        results = populated_db_no_pk.all()
+
+        # Check that all items were returned
+        assert len(results) == 3
+
+        # Check that a copy was returned (not the original list)
+        assert results is not populated_db_no_pk.data
+
+    def test_update_item_with_primary_key(self, temp_db_path, sample_item):
         """Test updating an item."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
         db.add(sample_item)
 
         # Update the item
@@ -238,19 +331,39 @@ class TestJsonDB:
             assert content[0]["status"] == "completed"  # Serialized as string
             assert content[0]["quantity"] == 10
 
+    def test_update_item_no_primary_key(self, temp_db_path, sample_item):
+        """Test updating an item when no primary key is configured."""
+        db = JsonDB(TestItem, temp_db_path)  # No primary key
+        db.add(sample_item)
+
+        # Try to update an item - should raise an exception
+        updated_item = TestItem(
+            id=sample_item.id,
+            name="Updated Item",
+            status=TestStatus.COMPLETED,
+            quantity=10,
+        )
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db.update(updated_item)
+
+        assert "Cannot use update() without a primary key configured" in str(
+            exc_info.value
+        )
+
     def test_update_nonexistent_item(self, temp_db_path, sample_item):
         """Test updating a nonexistent item."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         # Try to update an item that doesn't exist
         with pytest.raises(JsonDBException) as exc_info:
             db.update(sample_item)
 
-        assert f"Item with id {sample_item.id} not found" in str(exc_info.value)
+        assert f"Item with id='{sample_item.id}' not found" in str(exc_info.value)
 
     def test_update_wrong_type(self, temp_db_path, sample_item):
         """Test updating with an item of the wrong type."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
         db.add(sample_item)
 
         @dataclass
@@ -266,7 +379,7 @@ class TestJsonDB:
 
     def test_update_no_id(self, temp_db_path):
         """Test updating with an item that has no id attribute."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         @dataclass
         class NoIdItem:
@@ -278,9 +391,9 @@ class TestJsonDB:
 
         assert "must be of type TestItem" in str(exc_info.value)
 
-    def test_remove_item(self, temp_db_path, sample_item):
+    def test_remove_item_with_primary_key(self, temp_db_path, sample_item):
         """Test removing an item."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
         db.add(sample_item)
 
         # Remove the item
@@ -297,9 +410,22 @@ class TestJsonDB:
             content = json.load(f)
             assert len(content) == 0
 
+    def test_remove_item_no_primary_key(self, temp_db_path, sample_item):
+        """Test removing an item when no primary key is configured."""
+        db = JsonDB(TestItem, temp_db_path)  # No primary key
+        db.add(sample_item)
+
+        # Try to remove an item - should raise an exception
+        with pytest.raises(JsonDBException) as exc_info:
+            db.remove(sample_item.id)
+
+        assert "Cannot use remove() without a primary key configured" in str(
+            exc_info.value
+        )
+
     def test_remove_nonexistent_item(self, temp_db_path):
         """Test removing a nonexistent item."""
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         # Try to remove an item that doesn't exist
         result = db.remove(uuid.uuid4())
@@ -329,7 +455,7 @@ class TestJsonDB:
         print(f"Original UUID as string: {original_id_str}")
 
         # Initialize and add an item
-        db1 = JsonDB(TestItem, temp_db_path)
+        db1 = JsonDB(TestItem, temp_db_path, primary_key="id")
         db1.add(sample_item)
 
         # Make sure the file exists and has content
@@ -342,7 +468,7 @@ class TestJsonDB:
             assert saved_id == original_id_str
 
         # Re-initialize to test loading from file
-        db2 = JsonDB(TestItem, temp_db_path)
+        db2 = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         # Debug: print all items in db2
         all_items = db2.all()
@@ -377,7 +503,7 @@ class TestJsonDB:
         test_id_str = str(test_id)
 
         # Create a database
-        db = JsonDB(TestItem, temp_db_path)
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
 
         # Add an item with the test ID
         item = TestItem(
@@ -399,3 +525,198 @@ class TestJsonDB:
 
         # Direct comparison of the UUIDs should work
         assert test_id == recreated_uuid
+
+
+class TestCustomPrimaryKey:
+    """Test cases for custom primary keys (not 'id')."""
+
+    @dataclass
+    class CustomItem:
+        custom_id: str
+        name: str
+        value: int
+
+    def test_custom_primary_key(self, temp_db_path):
+        """Test using a custom primary key field."""
+        db = JsonDB(self.CustomItem, temp_db_path, primary_key="custom_id")
+
+        item = self.CustomItem(custom_id="custom_123", name="Test Item", value=42)
+        db.add(item)
+
+        # Test retrieval
+        found_item = db.get("custom_123")
+        assert found_item is not None
+        assert found_item.custom_id == "custom_123"
+        assert found_item.name == "Test Item"
+
+    def test_custom_primary_key_uniqueness(self, temp_db_path):
+        """Test uniqueness enforcement with custom primary key."""
+        db = JsonDB(self.CustomItem, temp_db_path, primary_key="custom_id")
+
+        item1 = self.CustomItem(custom_id="same_id", name="First Item", value=1)
+        item2 = self.CustomItem(custom_id="same_id", name="Second Item", value=2)
+
+        db.add(item1)
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db.add(item2)
+
+        assert "Item with custom_id='same_id' already exists" in str(exc_info.value)
+
+    def test_custom_primary_key_update(self, temp_db_path):
+        """Test updating items with custom primary key."""
+        db = JsonDB(self.CustomItem, temp_db_path, primary_key="custom_id")
+
+        original_item = self.CustomItem(
+            custom_id="update_test", name="Original", value=10
+        )
+        db.add(original_item)
+
+        updated_item = self.CustomItem(
+            custom_id="update_test", name="Updated", value=20
+        )
+        db.update(updated_item)
+
+        # Verify update
+        found_item = db.get("update_test")
+        assert found_item.name == "Updated"
+        assert found_item.value == 20
+
+    def test_custom_primary_key_remove(self, temp_db_path):
+        """Test removing items with custom primary key."""
+        db = JsonDB(self.CustomItem, temp_db_path, primary_key="custom_id")
+
+        item = self.CustomItem(custom_id="remove_test", name="To Remove", value=5)
+        db.add(item)
+
+        # Remove the item
+        result = db.remove("remove_test")
+        assert result is True
+
+        # Verify removal
+        found_item = db.get("remove_test")
+        assert found_item is None
+
+
+class TestPrimaryKeyEdgeCases:
+    """Test edge cases and error conditions for primary keys."""
+
+    @dataclass
+    class ItemWithInt:
+        pk: int
+        name: str
+
+    @dataclass
+    class ItemWithOptional:
+        id: uuid.UUID
+        optional_field: str = "default"
+
+    def test_integer_primary_key(self, temp_db_path):
+        """Test using an integer as primary key."""
+        db = JsonDB(self.ItemWithInt, temp_db_path, primary_key="pk")
+
+        item = self.ItemWithInt(pk=123, name="Integer PK Test")
+        db.add(item)
+
+        found_item = db.get(123)
+        assert found_item is not None
+        assert found_item.pk == 123
+
+    def test_primary_key_with_none_value(self, temp_db_path):
+        """Test behavior when primary key value is None."""
+
+        @dataclass
+        class ItemWithNone:
+            id: uuid.UUID
+            name: str
+
+        db = JsonDB(ItemWithNone, temp_db_path, primary_key="id")
+
+        # Create item with None id
+        item = ItemWithNone(id=None, name="None ID Test")
+
+        # This should work - None is a valid value
+        db.add(item)
+
+        # Should be able to retrieve it
+        found_item = db.get(None)
+        assert found_item is not None
+        assert found_item.name == "None ID Test"
+
+    def test_serialization_with_custom_pk(self, temp_db_path):
+        """Test serialization/deserialization round trip with custom primary key."""
+        db1 = JsonDB(
+            TestCustomPrimaryKey.CustomItem, temp_db_path, primary_key="custom_id"
+        )
+
+        original_item = TestCustomPrimaryKey.CustomItem(
+            custom_id="serialize_test", name="Serialization Test", value=999
+        )
+        db1.add(original_item)
+
+        # Create new database instance to test loading
+        db2 = JsonDB(
+            TestCustomPrimaryKey.CustomItem, temp_db_path, primary_key="custom_id"
+        )
+
+        loaded_item = db2.get("serialize_test")
+        assert loaded_item is not None
+        assert loaded_item.custom_id == "serialize_test"
+        assert loaded_item.name == "Serialization Test"
+        assert loaded_item.value == 999
+
+    def test_mixed_operations_with_and_without_pk(self, temp_db_path):
+        """Test that databases with and without primary keys can coexist."""
+        # First, create a database without primary key and add some data
+        db_no_pk = JsonDB(TestItem, temp_db_path)
+        item1 = TestItem(
+            id=uuid.uuid4(), name="No PK Item", status=TestStatus.ACTIVE, quantity=1
+        )
+        db_no_pk.add(item1)
+
+        # Now create a database with primary key on the same file
+        db_with_pk = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        # Should be able to load the existing data
+        all_items = db_with_pk.all()
+        assert len(all_items) == 1
+        assert all_items[0].name == "No PK Item"
+
+        # Should be able to retrieve the item by ID
+        found_item = db_with_pk.get(item1.id)
+        assert found_item is not None
+        assert found_item.name == "No PK Item"
+
+    def test_error_messages_clarity(self, temp_db_path):
+        """Test that error messages are clear and helpful."""
+        # Test invalid primary key
+        with pytest.raises(JsonDBException) as exc_info:
+            JsonDB(TestItem, temp_db_path, primary_key="nonexistent")
+        assert "Primary key 'nonexistent' not found in TestItem fields" in str(
+            exc_info.value
+        )
+
+        # Test operations without primary key
+        db = JsonDB(TestItem, temp_db_path)  # No primary key
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db.get("some_value")
+        assert "Cannot use get() without a primary key configured" in str(
+            exc_info.value
+        )
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db.update(
+                TestItem(
+                    id=uuid.uuid4(), name="test", status=TestStatus.ACTIVE, quantity=1
+                )
+            )
+        assert "Cannot use update() without a primary key configured" in str(
+            exc_info.value
+        )
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db.remove("some_value")
+        assert "Cannot use remove() without a primary key configured" in str(
+            exc_info.value
+        )
