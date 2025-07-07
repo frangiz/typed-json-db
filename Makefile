@@ -1,4 +1,4 @@
-.PHONY: help install build clean publish-test publish test format format-check check
+.PHONY: help test build clean
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
