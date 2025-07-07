@@ -77,20 +77,30 @@ class JsonSerializer:
 class JsonDB(Generic[T]):
     """A simple JSON file-based database for dataclasses."""
 
-    def __init__(self, data_class: Type[T], file_path: Path):
+    def __init__(
+        self, data_class: Type[T], file_path: Path, primary_key: Optional[str] = None
+    ):
         """
         Initialize the database with a dataclass type and file path.
 
         Args:
             data_class: The dataclass type this database will store
             file_path: Path to the JSON file
+            primary_key: The field name to use as primary key (optional)
         """
         self.data_class = data_class
         self.file_path = file_path
+        self.primary_key = primary_key
         self.data: List[T] = []
 
         # Extract type hints from the dataclass
         self.type_hints = get_type_hints(data_class)
+
+        # Validate primary key exists in dataclass if specified
+        if primary_key is not None and primary_key not in self.type_hints:
+            raise JsonDBException(
+                f"Primary key '{primary_key}' not found in {data_class.__name__} fields"
+            )
 
         self._load()
 
@@ -138,10 +148,16 @@ class JsonDB(Generic[T]):
         """Get all items."""
         return self.data.copy()
 
-    def get(self, id_value: uuid.UUID) -> Optional[T]:
-        """Get item by ID."""
+    def get(self, key_value) -> Optional[T]:
+        """Get item by primary key value."""
+        if self.primary_key is None:
+            raise JsonDBException("Cannot use get() without a primary key configured")
+
         for item in self.data:
-            if hasattr(item, "id") and getattr(item, "id") == id_value:
+            if (
+                hasattr(item, self.primary_key)
+                and getattr(item, self.primary_key) == key_value
+            ):
                 return item
         return None
 
@@ -169,12 +185,27 @@ class JsonDB(Generic[T]):
             The added item
 
         Raises:
-            JsonDBException: If the item is not of the expected type
+            JsonDBException: If the item is not of the expected type or primary key already exists
         """
         if not isinstance(item, self.data_class):
             raise JsonDBException(
                 f"Item must be of type {self.data_class.__name__}, got {type(item).__name__}"
             )
+
+        # Only check primary key constraints if primary key is configured
+        if self.primary_key is not None:
+            # Check if item has primary key
+            if not hasattr(item, self.primary_key):
+                raise JsonDBException(
+                    f"Item must have a '{self.primary_key}' attribute"
+                )
+
+            # Check for primary key uniqueness
+            key_value = getattr(item, self.primary_key)
+            if self.get(key_value) is not None:
+                raise JsonDBException(
+                    f"Item with {self.primary_key}='{key_value}' already exists"
+                )
 
         self.data.append(item)
         self.save()
@@ -182,41 +213,54 @@ class JsonDB(Generic[T]):
 
     def update(self, item: T) -> T:
         """
-        Update an existing item.
+        Update an existing item by its current primary key value.
 
         Args:
-            item: The updated item, must be of the correct type and have an id
+            item: The updated item, must be of the correct type and have a primary key
 
         Returns:
             The updated item
 
         Raises:
-            JsonDBException: If the item is not of the expected type, has no id, or the id doesn't exist
+            JsonDBException: If the item is not of the expected type, has no primary key, or the key doesn't exist
         """
+        if self.primary_key is None:
+            raise JsonDBException(
+                "Cannot use update() without a primary key configured"
+            )
+
         if not isinstance(item, self.data_class):
             raise JsonDBException(
                 f"Item must be of type {self.data_class.__name__}, got {type(item).__name__}"
             )
 
-        if not hasattr(item, "id"):
-            raise JsonDBException("Item must have an 'id' attribute")
+        if not hasattr(item, self.primary_key):
+            raise JsonDBException(f"Item must have a '{self.primary_key}' attribute")
 
-        id_value = getattr(item, "id")
+        key_value = getattr(item, self.primary_key)
         for i, existing_item in enumerate(self.data):
             if (
-                hasattr(existing_item, "id")
-                and getattr(existing_item, "id") == id_value
+                hasattr(existing_item, self.primary_key)
+                and getattr(existing_item, self.primary_key) == key_value
             ):
                 self.data[i] = item
                 self.save()
                 return item
 
-        raise JsonDBException(f"Item with id {id_value} not found")
+        raise JsonDBException(f"Item with {self.primary_key}='{key_value}' not found")
 
-    def remove(self, id_value: uuid.UUID) -> bool:
-        """Remove an item by ID."""
+    def remove(self, key_value) -> bool:
+        """Remove an item by primary key value."""
+        if self.primary_key is None:
+            raise JsonDBException(
+                "Cannot use remove() without a primary key configured"
+            )
+
         for i, item in enumerate(self.data):
-            if hasattr(item, "id") and getattr(item, "id") == id_value:
+            if (
+                hasattr(item, self.primary_key)
+                and getattr(item, self.primary_key) == key_value
+            ):
                 self.data.pop(i)
                 self.save()
                 return True

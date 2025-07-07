@@ -11,6 +11,7 @@
 - Keep functions small and focused
 - Use dataclasses over dictionaries when structure matters
 - Favor composition over inheritance
+- Add tests for all code changes
 
 ## Project Structure
 - Follow existing patterns in the codebase
