@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import get_type_hints
 
-from src.simple_json_db import JsonDB, JsonDBException, JsonSerializer
+from src.typed_json_db import JsonDB, JsonDBException, JsonSerializer
 
 
 class TestStatus(Enum):

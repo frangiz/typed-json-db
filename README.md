@@ -18,13 +18,13 @@ A lightweight, type-safe JSON-based database for Python applications using datac
 Install from PyPI using pip:
 
 ```bash
-pip install simple-json-db
+pip install typed-json-db
 ```
 
 Or using uv:
 
 ```bash
-uv add simple-json-db
+uv add typed-json-db
 ```
 
 ## Quick Start
@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from enum import Enum
 import uuid
 from pathlib import Path
-from simple_json_db import JsonDB
+from typed_json_db import JsonDB
 
 # Define your data structure using dataclasses
 class Status(Enum):
@@ -122,7 +122,7 @@ The database automatically handles serialization/deserialization of:
 ### Error Handling
 
 ```python
-from simple_json_db import JsonDBException
+from typed_json_db import JsonDBException
 
 try:
     db.add(invalid_item)
@@ -138,8 +138,8 @@ This project uses `uv` for dependency management and packaging.
 
 ```bash
 # Clone the repository
-git clone https://github.com/frangiz/simple-json-db.git
-cd simple-json-db
+git clone https://github.com/frangiz/typed-json-db.git
+cd typed-json-db
 
 # Install development dependencies
 uv sync

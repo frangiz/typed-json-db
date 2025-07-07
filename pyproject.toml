@@ -1,5 +1,5 @@
 [project]
-name = "simple-json-db"
+name = "typed-json-db"
 version = "0.1.0"
 description = "A simple JSON-based database for Python applications"
 readme = "README.md"
@@ -10,7 +10,7 @@ authors = [
 maintainers = [
     { name = "frangiz", email = "frangiz@gmail.com" }
 ]
-keywords = ["json", "database", "simple", "storage", "persistence"]
+keywords = ["json", "database", "typed", "dataclass", "storage", "persistence"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers", 
@@ -27,22 +27,22 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/frangiz/simple-json-db"
-Repository = "https://github.com/frangiz/simple-json-db"
-Issues = "https://github.com/frangiz/simple-json-db/issues"
-Documentation = "https://github.com/frangiz/simple-json-db#readme"
+Homepage = "https://github.com/frangiz/typed-json-db"
+Repository = "https://github.com/frangiz/typed-json-db"
+Issues = "https://github.com/frangiz/typed-json-db/issues"
+Documentation = "https://github.com/frangiz/typed-json-db#readme"
 
 
 
 [project.scripts]
-simple-json-db = "simple_json_db:main"
+typed-json-db = "typed_json_db:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/simple_json_db"]
+packages = ["src/typed_json_db"]
 
 [tool.hatch.build.targets.sdist]
 include = [
