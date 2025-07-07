@@ -18,6 +18,7 @@
 - Use `uv` for dependency management
 - Test coverage is important but don't over-test trivial code
 - Use `ruff` for formatting and linting
+- **Update README.md** when API or core logic changes - users need current documentation
 
 ## Suggestions Style
 - Explain *why* not just *what*

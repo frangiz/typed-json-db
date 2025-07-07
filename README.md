@@ -8,7 +8,9 @@ A lightweight, type-safe JSON-based database for Python applications using datac
 - 📁 **File-based**: Uses JSON files for storage - easy to inspect and backup
 - 🔍 **Query support**: Find records using attribute-based queries
 - 🔧 **CRUD operations**: Create, Read, Update, Delete operations
-- 📦 **Zero dependencies**: No external dependencies required
+- � **Primary key support**: Optional configurable primary key with uniqueness enforcement
+- ⚡ **Indexing**: Automatic indexing for primary key operations for fast lookups
+- �📦 **Zero dependencies**: No external dependencies required
 - 🐍 **Type hints**: Full type hint support with generics
 - ✅ **Well tested**: Comprehensive test suite
 - 🆔 **UUID support**: Automatic handling of UUID fields
@@ -53,6 +55,9 @@ class User:
 # Create or connect to a database
 db = JsonDB(User, Path("users.json"))
 
+# Or create with a primary key for better performance and uniqueness enforcement
+db = JsonDB(User, Path("users.json"), primary_key="id")
+
 # Add records
 user1 = User(
     id=uuid.uuid4(),
@@ -78,38 +83,84 @@ db.remove(user1.id)
 
 ## API Reference
 
-### JsonDB[T](data_class: Type[T], file_path: Path)
+### JsonDB[T](data_class: Type[T], file_path: Path, primary_key: Optional[str] = None)
 
 Create a new type-safe database instance.
 
 **Parameters:**
 - `data_class`: The dataclass type this database will store
 - `file_path`: Path to the JSON database file
+- `primary_key`: Optional field name to use as primary key for uniqueness and indexing
 
 ### Methods
 
 #### add(item: T) -> T
-Add a new item to the database and save automatically.
+Add a new item to the database and save automatically. If a primary key is configured, enforces uniqueness.
 
-#### get(id_value: uuid.UUID) -> Optional[T]
-Get an item by its UUID. Returns None if not found.
+#### get(primary_key_value: Any) -> Optional[T]
+Get an item by its primary key value. Returns None if not found. Requires a primary key to be configured.
 
 #### find(**kwargs) -> List[T]
-Find all items matching the given attribute criteria.
+Find all items matching the given attribute criteria. Requires at least one search criterion.
 
 #### all() -> List[T]
 Get all items in the database.
 
 #### update(item: T) -> T
-Update an existing item (by ID) and save automatically.
+Update an existing item (by primary key) and save automatically. Requires a primary key to be configured.
 
-#### remove(id_value: uuid.UUID) -> bool
-Remove an item by its UUID. Returns True if removed, False if not found.
+#### remove(primary_key_value: Any) -> bool
+Remove an item by its primary key value. Returns True if removed, False if not found. Requires a primary key to be configured.
 
 #### save() -> None
 Manually save the database (automatic for add/update/remove operations).
 
 ## Advanced Features
+
+### Primary Key Configuration
+
+Configure a primary key for better performance and data integrity:
+
+```python
+@dataclass
+class Product:
+    sku: str
+    name: str
+    price: float
+
+# Use 'sku' as primary key
+db = JsonDB(Product, Path("products.json"), primary_key="sku")
+
+# Primary key operations are fast (O(1)) and enforce uniqueness
+product = Product(sku="ABC123", name="Widget", price=9.99)
+db.add(product)
+
+# Fast retrieval by primary key
+found = db.get("ABC123")
+
+# Trying to add duplicate primary key raises an exception
+duplicate = Product(sku="ABC123", name="Another Widget", price=19.99)
+# db.add(duplicate)  # Raises JsonDBException
+```
+
+### Database Operations Without Primary Key
+
+You can still use the database without a primary key, but some operations will be limited:
+
+```python
+# No primary key specified
+db = JsonDB(User, Path("users.json"))
+
+# These work normally
+db.add(user)
+users = db.find(status=Status.ACTIVE)
+all_users = db.all()
+
+# These require a primary key and will raise JsonDBException
+# db.get(some_id)      # Not available
+# db.update(user)      # Not available  
+# db.remove(some_id)   # Not available
+```
 
 ### Automatic Type Conversion
 
@@ -118,6 +169,24 @@ The database automatically handles serialization/deserialization of:
 - Enum values  
 - datetime and date objects
 - Complex nested dataclass structures
+
+### Performance and Indexing
+
+When a primary key is configured, the database automatically creates an in-memory index for fast lookups:
+
+- **Primary key operations** (`get`, single-key `find`) are O(1) - constant time
+- **Non-primary key searches** use linear search - O(n) time
+- **Index is automatically maintained** during add, update, and remove operations
+- **Index is rebuilt** when loading the database from disk
+
+```python
+# Fast O(1) operations with primary key
+db = JsonDB(User, Path("users.json"), primary_key="id")
+user = db.get(user_id)  # Very fast, uses index
+
+# Linear search operations (still fast for reasonable dataset sizes)
+active_users = db.find(status=Status.ACTIVE)  # Searches all records
+```
 
 ### Error Handling
 
