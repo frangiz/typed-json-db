@@ -93,6 +93,9 @@ class JsonDB(Generic[T]):
         self.primary_key = primary_key
         self.data: List[T] = []
 
+        # Primary key index for performance optimization
+        self._primary_key_index: Dict = {}
+
         # Extract type hints from the dataclass
         self.type_hints = get_type_hints(data_class)
 
@@ -103,6 +106,10 @@ class JsonDB(Generic[T]):
             )
 
         self._load()
+
+        # Build primary key index if primary key is specified
+        if self.primary_key:
+            self._rebuild_primary_key_index()
 
     def _load(self) -> None:
         """Load data from the JSON file."""
@@ -153,16 +160,27 @@ class JsonDB(Generic[T]):
         if self.primary_key is None:
             raise JsonDBException("Cannot use get() without a primary key configured")
 
-        for item in self.data:
-            if (
-                hasattr(item, self.primary_key)
-                and getattr(item, self.primary_key) == key_value
-            ):
-                return item
+        # Use primary key index for O(1) lookup
+        if key_value in self._primary_key_index:
+            item_index = self._primary_key_index[key_value]
+            return self.data[item_index]
+
         return None
 
     def find(self, **kwargs) -> List[T]:
         """Find items matching the given criteria."""
+        if not kwargs:
+            raise JsonDBException(
+                "find() requires at least one search criterion. Use all() to get all items."
+            )
+
+        # Use primary key index if searching by primary key only
+        if self.primary_key and len(kwargs) == 1 and self.primary_key in kwargs:
+            key_value = kwargs[self.primary_key]
+            item = self.get(key_value)
+            return [item] if item else []
+
+        # Fall back to linear search for other criteria
         results = []
         for item in self.data:
             match = True
@@ -172,6 +190,7 @@ class JsonDB(Generic[T]):
                     break
             if match:
                 results.append(item)
+
         return results
 
     def add(self, item: T) -> T:
@@ -208,6 +227,12 @@ class JsonDB(Generic[T]):
                 )
 
         self.data.append(item)
+
+        # Update primary key index
+        if self.primary_key:
+            key_value = getattr(item, self.primary_key)
+            self._primary_key_index[key_value] = len(self.data) - 1
+
         self.save()
         return item
 
@@ -262,6 +287,22 @@ class JsonDB(Generic[T]):
                 and getattr(item, self.primary_key) == key_value
             ):
                 self.data.pop(i)
+
+                # Rebuild primary key index since indices have shifted
+                if self.primary_key:
+                    self._rebuild_primary_key_index()
+
                 self.save()
                 return True
         return False
+
+    def _rebuild_primary_key_index(self) -> None:
+        """Rebuild the primary key index for fast lookups."""
+        if not self.primary_key:
+            return
+
+        self._primary_key_index = {}
+        for i, item in enumerate(self.data):
+            if hasattr(item, self.primary_key):
+                key_value = getattr(item, self.primary_key)
+                self._primary_key_index[key_value] = i

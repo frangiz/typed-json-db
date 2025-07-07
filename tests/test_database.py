@@ -281,6 +281,27 @@ class TestJsonDB:
         # Check that no items were found
         assert len(results) == 0
 
+    def test_find_requires_criteria(self, temp_db_path):
+        """Test that find() requires search criteria."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        # Add some test data
+        item = TestItem(
+            id=uuid.uuid4(), name="Test Item", status=TestStatus.ACTIVE, quantity=1
+        )
+        db.add(item)
+
+        # Test that find() without criteria raises an error
+        with pytest.raises(JsonDBException) as exc_info:
+            db.find()
+        assert "find() requires at least one search criterion" in str(exc_info.value)
+        assert "Use all() to get all items" in str(exc_info.value)
+
+        # Verify that find() with criteria still works
+        results = db.find(status=TestStatus.ACTIVE)
+        assert len(results) == 1
+        assert results[0].name == "Test Item"
+
     def test_all_items_with_primary_key(self, populated_db):
         """Test retrieving all items."""
         # Get all items
@@ -720,3 +741,138 @@ class TestPrimaryKeyEdgeCases:
         assert "Cannot use remove() without a primary key configured" in str(
             exc_info.value
         )
+
+
+class TestPrimaryKeyIndexing:
+    """Test cases for primary key indexing performance optimization."""
+
+    def test_primary_key_index_creation(self, temp_db_path):
+        """Test that primary key index is automatically created."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        # Add some items
+        items = []
+        for i in range(5):
+            item = TestItem(
+                id=uuid.uuid4(),
+                name=f"Item {i}",
+                status=TestStatus.ACTIVE,
+                quantity=i,
+            )
+            items.append(item)
+            db.add(item)
+
+        # Verify that the index contains all primary keys
+        assert len(db._primary_key_index) == 5
+        for item in items:
+            assert item.id in db._primary_key_index
+
+    def test_index_maintained_on_updates(self, temp_db_path):
+        """Test that the index is properly maintained during updates."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        # Add initial items
+        item1 = TestItem(
+            id=uuid.uuid4(), name="Item 1", status=TestStatus.ACTIVE, quantity=1
+        )
+        item2 = TestItem(
+            id=uuid.uuid4(), name="Item 2", status=TestStatus.ACTIVE, quantity=2
+        )
+
+        db.add(item1)
+        db.add(item2)
+
+        # Verify index state
+        assert len(db._primary_key_index) == 2
+        assert item1.id in db._primary_key_index
+        assert item2.id in db._primary_key_index
+
+        # Update an item
+        updated_item1 = TestItem(
+            id=item1.id, name="Updated Item 1", status=TestStatus.COMPLETED, quantity=10
+        )
+        db.update(updated_item1)
+
+        # Verify index is still correct
+        assert len(db._primary_key_index) == 2
+        assert item1.id in db._primary_key_index
+        assert item2.id in db._primary_key_index
+
+        # Verify we can still get the updated item
+        found_item = db.get(item1.id)
+        assert found_item.name == "Updated Item 1"
+        assert found_item.quantity == 10
+
+    def test_index_maintained_on_removal(self, temp_db_path):
+        """Test that the index is properly maintained during removals."""
+        db = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        # Add items
+        item1 = TestItem(
+            id=uuid.uuid4(), name="Item 1", status=TestStatus.ACTIVE, quantity=1
+        )
+        item2 = TestItem(
+            id=uuid.uuid4(), name="Item 2", status=TestStatus.ACTIVE, quantity=2
+        )
+        item3 = TestItem(
+            id=uuid.uuid4(), name="Item 3", status=TestStatus.ACTIVE, quantity=3
+        )
+
+        db.add(item1)
+        db.add(item2)
+        db.add(item3)
+
+        # Verify initial index state
+        assert len(db._primary_key_index) == 3
+
+        # Remove middle item
+        result = db.remove(item2.id)
+        assert result is True
+
+        # Verify index is updated
+        assert len(db._primary_key_index) == 2
+        assert item1.id in db._primary_key_index
+        assert item2.id not in db._primary_key_index
+        assert item3.id in db._primary_key_index
+
+        # Verify we can still get remaining items
+        found_item1 = db.get(item1.id)
+        found_item3 = db.get(item3.id)
+        assert found_item1 is not None
+        assert found_item3 is not None
+
+        # Verify removed item cannot be found
+        found_item2 = db.get(item2.id)
+        assert found_item2 is None
+
+    def test_index_persistence_across_loads(self, temp_db_path):
+        """Test that the index is rebuilt when loading from file."""
+        # Create database and add items
+        db1 = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        item1 = TestItem(
+            id=uuid.uuid4(), name="Item 1", status=TestStatus.ACTIVE, quantity=1
+        )
+        item2 = TestItem(
+            id=uuid.uuid4(), name="Item 2", status=TestStatus.ACTIVE, quantity=2
+        )
+
+        db1.add(item1)
+        db1.add(item2)
+
+        # Create new database instance (simulates restart)
+        db2 = JsonDB(TestItem, temp_db_path, primary_key="id")
+
+        # Verify index was rebuilt
+        assert len(db2._primary_key_index) == 2
+        assert item1.id in db2._primary_key_index
+        assert item2.id in db2._primary_key_index
+
+        # Verify we can get items using the rebuilt index
+        found_item1 = db2.get(item1.id)
+        found_item2 = db2.get(item2.id)
+
+        assert found_item1 is not None
+        assert found_item2 is not None
+        assert found_item1.name == "Item 1"
+        assert found_item2.name == "Item 2"
