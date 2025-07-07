@@ -90,8 +90,7 @@ jobs:
     
     - name: Check package
       run: |
-        uv run python -m pip install twine
-        uv run twine check dist/*
+        uv run --with twine twine check dist/*
     
     - name: Test installation from wheel
       run: |

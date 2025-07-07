@@ -1,0 +1,31 @@
+# AI Assistant Rules for typed-json-db
+
+## Code Style Priorities
+1. **Readability first** - Clear, self-documenting code
+2. **Non-verbose** - Concise but not cryptic
+3. **Performance** - Only if it doesn't hurt readability
+
+## Python Guidelines
+- Use type hints consistently
+- Prefer descriptive variable names over comments
+- Keep functions small and focused
+- Use dataclasses over dictionaries when structure matters
+- Favor composition over inheritance
+
+## Project Structure
+- Follow existing patterns in the codebase
+- Use `uv` for dependency management
+- Test coverage is important but don't over-test trivial code
+- Use `ruff` for formatting and linting
+
+## Suggestions Style
+- Explain *why* not just *what*
+- Show concrete examples
+- Prioritize maintainability over cleverness
+- When optimizing, measure first
+
+## Tools & Commands
+- Use `make` commands consistently (check Makefile)
+- Prefer `uv run` over direct pip/python calls
+- Use GitHub Actions for CI/CD automation
+- Keep workflows simple and reliable
