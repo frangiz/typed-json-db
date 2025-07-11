@@ -547,6 +547,102 @@ class TestJsonDB:
         # Direct comparison of the UUIDs should work
         assert test_id == recreated_uuid
 
+    def test_nested_dataclasses_serialization(self, temp_db_path):
+        """Test that nested dataclasses are properly serialized and deserialized."""
+        
+        @dataclass
+        class Address:
+            street: str
+            city: str
+            postal_code: str
+            country: str = "USA"
+
+        @dataclass
+        class Contact:
+            email: str
+            phone: str
+
+        @dataclass
+        class Person:
+            id: uuid.UUID
+            name: str
+            address: Address
+            contact: Contact
+            tags: list[str]
+            metadata: dict[str, str]
+
+        # Create database with nested structure
+        db = JsonDB(Person, temp_db_path, primary_key="id")
+
+        # Create person with nested data
+        person_id = uuid.uuid4()
+        address = Address(
+            street="123 Main St", 
+            city="Anytown", 
+            postal_code="12345",
+            country="USA"
+        )
+        contact = Contact(email="john@example.com", phone="555-1234")
+        
+        person = Person(
+            id=person_id,
+            name="John Doe",
+            address=address,
+            contact=contact,
+            tags=["employee", "manager"],
+            metadata={"department": "engineering", "level": "senior"}
+        )
+
+        # Add to database
+        db.add(person)
+
+        # Retrieve and verify all nested data is preserved
+        retrieved = db.get(person_id)
+        assert retrieved is not None
+        assert retrieved.id == person_id
+        assert retrieved.name == "John Doe"
+        
+        # Verify nested Address dataclass
+        assert isinstance(retrieved.address, Address)
+        assert retrieved.address.street == "123 Main St"
+        assert retrieved.address.city == "Anytown"
+        assert retrieved.address.postal_code == "12345"
+        assert retrieved.address.country == "USA"
+        
+        # Verify nested Contact dataclass
+        assert isinstance(retrieved.contact, Contact)
+        assert retrieved.contact.email == "john@example.com"
+        assert retrieved.contact.phone == "555-1234"
+        
+        # Verify list and dict are preserved
+        assert retrieved.tags == ["employee", "manager"]
+        assert retrieved.metadata == {"department": "engineering", "level": "senior"}
+
+        # Test serialization round trip by reloading database
+        db2 = JsonDB(Person, temp_db_path, primary_key="id")
+        reloaded = db2.get(person_id)
+        assert reloaded is not None
+        assert reloaded.address.street == "123 Main St"
+        assert reloaded.contact.email == "john@example.com"
+        assert reloaded.tags == ["employee", "manager"]
+
+        # Test find operations work with nested data
+        results = db2.find(name="John Doe")
+        assert len(results) == 1
+        assert results[0].address.city == "Anytown"
+
+        # Test update with nested data
+        reloaded.address.city = "New City"
+        reloaded.contact.phone = "555-9999"
+        reloaded.tags.append("senior")
+        db2.update(reloaded)
+
+        # Verify update persisted
+        updated = db2.get(person_id)
+        assert updated.address.city == "New City"
+        assert updated.contact.phone == "555-9999"
+        assert "senior" in updated.tags
+
 
 class TestCustomPrimaryKey:
     """Test cases for custom primary keys (not 'id')."""
