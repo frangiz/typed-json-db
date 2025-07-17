@@ -71,6 +71,24 @@ class JsonSerializer:
                     except (ValueError, KeyError):
                         pass
 
+                # Handle nested dataclass fields
+                elif (
+                    inspect.isclass(field_type)
+                    and hasattr(field_type, "__dataclass_fields__")
+                    and isinstance(value, dict)
+                ):
+                    try:
+                        # Get type hints for the nested dataclass
+                        nested_type_hints = get_type_hints(field_type)
+                        # Recursively process the nested dictionary
+                        nested_dict = JsonSerializer.object_hook_with_types(
+                            value, nested_type_hints
+                        )
+                        # Create the dataclass instance
+                        obj_dict[key] = field_type(**nested_dict)
+                    except (TypeError, ValueError):
+                        pass
+
         return obj_dict
 
 
