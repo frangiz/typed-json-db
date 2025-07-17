@@ -549,7 +549,7 @@ class TestJsonDB:
 
     def test_nested_dataclasses_serialization(self, temp_db_path):
         """Test that nested dataclasses are properly serialized and deserialized."""
-        
+
         @dataclass
         class Address:
             street: str
@@ -577,20 +577,17 @@ class TestJsonDB:
         # Create person with nested data
         person_id = uuid.uuid4()
         address = Address(
-            street="123 Main St", 
-            city="Anytown", 
-            postal_code="12345",
-            country="USA"
+            street="123 Main St", city="Anytown", postal_code="12345", country="USA"
         )
         contact = Contact(email="john@example.com", phone="555-1234")
-        
+
         person = Person(
             id=person_id,
             name="John Doe",
             address=address,
             contact=contact,
             tags=["employee", "manager"],
-            metadata={"department": "engineering", "level": "senior"}
+            metadata={"department": "engineering", "level": "senior"},
         )
 
         # Add to database
@@ -601,19 +598,19 @@ class TestJsonDB:
         assert retrieved is not None
         assert retrieved.id == person_id
         assert retrieved.name == "John Doe"
-        
+
         # Verify nested Address dataclass
         assert isinstance(retrieved.address, Address)
         assert retrieved.address.street == "123 Main St"
         assert retrieved.address.city == "Anytown"
         assert retrieved.address.postal_code == "12345"
         assert retrieved.address.country == "USA"
-        
+
         # Verify nested Contact dataclass
         assert isinstance(retrieved.contact, Contact)
         assert retrieved.contact.email == "john@example.com"
         assert retrieved.contact.phone == "555-1234"
-        
+
         # Verify list and dict are preserved
         assert retrieved.tags == ["employee", "manager"]
         assert retrieved.metadata == {"department": "engineering", "level": "senior"}
