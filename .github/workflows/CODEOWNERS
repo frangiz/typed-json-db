@@ -1,0 +1,11 @@
+# This CODEOWNERS file designates code ownership for the invoice_importer repository
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# These owners will be the default owners for everything in the repo
+* @frangiz
+
+# More specific ownership can be added here if needed
+# Examples:
+# /src/ @frangiz
+# *.py @frangiz
+# /docs/ @frangiz

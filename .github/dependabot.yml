@@ -20,8 +20,6 @@ updates:
           - "patch"
     # Only create PRs for security updates and major version bumps individually
     open-pull-requests-limit: 5
-    reviewers:
-      - "frangiz"
     commit-message:
       prefix: "deps"
       prefix-development: "deps-dev"
@@ -36,8 +34,6 @@ updates:
       time: "09:00"
       timezone: "Etc/UTC"
     open-pull-requests-limit: 3
-    reviewers:
-      - "frangiz"
     commit-message:
       prefix: "ci"
       include: "scope"
