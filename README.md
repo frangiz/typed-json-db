@@ -1,5 +1,7 @@
 # Simple JSON DB
 
+[![codecov](https://codecov.io/gh/frangiz/typed-json-db/branch/main/graph/badge.svg?token=7W6IH9PXQO)](https://codecov.io/gh/frangiz/typed-json-db)
+
 A lightweight, type-safe JSON-based database for Python applications using dataclasses. Perfect for small projects, prototyping, and situations where you need a simple persistent storage solution with type safety.
 
 ## Features
