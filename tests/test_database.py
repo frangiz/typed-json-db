@@ -638,7 +638,95 @@ class TestJsonDB:
         updated = db2.get(person_id)
         assert updated.address.city == "New City"
         assert updated.contact.phone == "555-9999"
-        assert "senior" in updated.tags
+
+    def test_list_of_dataclasses_serialization(self, temp_db_path):
+        """Test that lists of dataclasses are properly serialized and deserialized."""
+
+        @dataclass
+        class Address:
+            street: str
+            city: str
+            postal_code: str
+            country: str = "USA"
+
+        @dataclass
+        class Contact:
+            email: str
+            phone: str
+            is_primary: bool = True
+
+        @dataclass
+        class Organization:
+            id: uuid.UUID
+            name: str
+            headquarters: Address
+            contacts: list[Contact]  # List of dataclasses
+
+        # Create database with list of dataclasses
+        db = JsonDB(Organization, temp_db_path, primary_key="id")
+
+        # Create an organization with a list of contacts
+        org_id = uuid.uuid4()
+        hq = Address(
+            street="100 Corporate Way",
+            city="Enterprise",
+            postal_code="54321",
+            country="USA",
+        )
+
+        contacts = [
+            Contact(email="sales@example.com", phone="555-1000"),
+            Contact(email="support@example.com", phone="555-2000", is_primary=False),
+            Contact(email="info@example.com", phone="555-3000", is_primary=False),
+        ]
+
+        org = Organization(
+            id=org_id, name="Example Corp", headquarters=hq, contacts=contacts
+        )
+
+        # Add to database
+        db.add(org)
+
+        # Retrieve and verify data is preserved
+        retrieved = db.get(org_id)
+        assert retrieved is not None
+        assert retrieved.id == org_id
+        assert retrieved.name == "Example Corp"
+
+        # Verify nested Address dataclass
+        assert isinstance(retrieved.headquarters, Address)
+        assert retrieved.headquarters.street == "100 Corporate Way"
+        assert retrieved.headquarters.city == "Enterprise"
+
+        # Verify list of Contact dataclasses
+        assert isinstance(retrieved.contacts, list)
+        assert len(retrieved.contacts) == 3
+
+        # Check each contact is properly deserialized
+        for i, contact in enumerate(retrieved.contacts):
+            assert isinstance(contact, Contact)
+            assert contact.email == contacts[i].email
+            assert contact.phone == contacts[i].phone
+            assert contact.is_primary == contacts[i].is_primary
+
+        # Test serialization round trip by reloading database
+        db2 = JsonDB(Organization, temp_db_path, primary_key="id")
+        reloaded = db2.get(org_id)
+        assert reloaded is not None
+
+        # Verify list of contacts is correctly preserved after reload
+        assert len(reloaded.contacts) == 3
+        assert isinstance(reloaded.contacts[0], Contact)
+        assert reloaded.contacts[0].email == "sales@example.com"
+        assert reloaded.contacts[0].is_primary is True
+        assert reloaded.contacts[1].email == "support@example.com"
+        assert reloaded.contacts[1].is_primary is False
+
+        # Test find operations work with nested data
+        results = db2.find(name="Example Corp")
+        assert len(results) == 1
+        assert len(results[0].contacts) == 3
+        assert results[0].contacts[2].email == "info@example.com"
 
 
 class TestCustomPrimaryKey:

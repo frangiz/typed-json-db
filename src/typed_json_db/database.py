@@ -5,7 +5,17 @@ from dataclasses import asdict
 from datetime import datetime, date
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Generic, List, Optional, Type, TypeVar, get_type_hints
+from typing import (
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    get_type_hints,
+    get_origin,
+    get_args,
+)
 
 from .exceptions import JsonDBException
 
@@ -38,9 +48,33 @@ class JsonSerializer:
         for key, value in obj_dict.items():
             if key in type_hints:
                 field_type = type_hints[key]
+                origin_type = get_origin(field_type)
+
+                # Handle List of dataclasses
+                if origin_type is list and isinstance(value, list):
+                    try:
+                        args = get_args(field_type)
+                        if (
+                            args
+                            and inspect.isclass(args[0])
+                            and hasattr(args[0], "__dataclass_fields__")
+                        ):
+                            nested_type = args[0]
+                            nested_type_hints = get_type_hints(nested_type)
+                            obj_dict[key] = [
+                                nested_type(
+                                    **JsonSerializer.object_hook_with_types(
+                                        item, nested_type_hints
+                                    )
+                                )
+                                for item in value
+                                if isinstance(item, dict)
+                            ]
+                    except (TypeError, ValueError, IndexError):
+                        pass
 
                 # Handle UUID fields
-                if field_type == uuid.UUID and isinstance(value, str):
+                elif field_type == uuid.UUID and isinstance(value, str):
                     try:
                         obj_dict[key] = uuid.UUID(value)
                     except ValueError:

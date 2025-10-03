@@ -2,6 +2,7 @@ include README.md
 include LICENSE
 include pyproject.toml
 recursive-include src *.py
+include src/typed_json_db/py.typed
 recursive-include tests *.py
 global-exclude *.pyc
 global-exclude __pycache__
