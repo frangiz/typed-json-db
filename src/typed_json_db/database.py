@@ -5,7 +5,17 @@ from dataclasses import asdict
 from datetime import datetime, date
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Generic, List, Optional, Type, TypeVar, get_type_hints
+from typing import (
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    get_type_hints,
+    get_origin,
+    get_args,
+)
 
 from .exceptions import JsonDBException
 
@@ -27,20 +37,50 @@ class JsonSerializer:
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     @staticmethod
-    def object_hook_with_types(obj_dict, type_hints):
+    def object_hook_with_types(obj_dict, type_hints, max_depth=10):
         """
         Process JSON objects during deserialization using type hints.
 
         Args:
             obj_dict: Dictionary to process
             type_hints: Dictionary mapping field names to their type annotations
+            max_depth: Maximum recursion depth to prevent infinite recursion (default: 10)
         """
+        # Guard against excessive recursion
+        if max_depth <= 0:
+            return obj_dict
+
         for key, value in obj_dict.items():
             if key in type_hints:
                 field_type = type_hints[key]
+                origin_type = get_origin(field_type)
+
+                # Handle List of dataclasses
+                if origin_type is list and isinstance(value, list):
+                    try:
+                        args = get_args(field_type)
+                        if (
+                            args
+                            and inspect.isclass(args[0])
+                            and hasattr(args[0], "__dataclass_fields__")
+                        ):
+                            nested_type = args[0]
+                            nested_type_hints = get_type_hints(nested_type)
+                            # Decrement depth for recursive calls
+                            obj_dict[key] = [
+                                nested_type(
+                                    **JsonSerializer.object_hook_with_types(
+                                        item, nested_type_hints, max_depth - 1
+                                    )
+                                )
+                                for item in value
+                                if isinstance(item, dict)
+                            ]
+                    except (TypeError, ValueError, IndexError):
+                        pass
 
                 # Handle UUID fields
-                if field_type == uuid.UUID and isinstance(value, str):
+                elif field_type == uuid.UUID and isinstance(value, str):
                     try:
                         obj_dict[key] = uuid.UUID(value)
                     except ValueError:
@@ -80,9 +120,9 @@ class JsonSerializer:
                     try:
                         # Get type hints for the nested dataclass
                         nested_type_hints = get_type_hints(field_type)
-                        # Recursively process the nested dictionary
+                        # Recursively process the nested dictionary with decremented depth
                         nested_dict = JsonSerializer.object_hook_with_types(
-                            value, nested_type_hints
+                            value, nested_type_hints, max_depth - 1
                         )
                         # Create the dataclass instance
                         obj_dict[key] = field_type(**nested_dict)

@@ -1,6 +1,6 @@
 [project]
 name = "typed-json-db"
-version = "0.2.2"
+version = "0.2.3"
 description = "A simple JSON-based database for Python applications"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -25,6 +25,9 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = []
+
+[tool.setuptools.package-data]
+typed_json_db = ["py.typed"]
 
 [project.urls]
 Homepage = "https://github.com/frangiz/typed-json-db"

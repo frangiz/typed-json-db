@@ -3,7 +3,7 @@
 from .database import JsonDB, JsonSerializer
 from .exceptions import JsonDBException
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 __all__ = [
     "JsonDB",
     "JsonSerializer",
