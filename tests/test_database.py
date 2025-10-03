@@ -703,11 +703,11 @@ class TestJsonDB:
         assert len(retrieved.contacts) == 3
 
         # Check each contact is properly deserialized
-        for i, contact in enumerate(retrieved.contacts):
+        for contact, expected_contact in zip(retrieved.contacts, contacts):
             assert isinstance(contact, Contact)
-            assert contact.email == contacts[i].email
-            assert contact.phone == contacts[i].phone
-            assert contact.is_primary == contacts[i].is_primary
+            assert contact.email == expected_contact.email
+            assert contact.phone == expected_contact.phone
+            assert contact.is_primary == expected_contact.is_primary
 
         # Test serialization round trip by reloading database
         db2 = JsonDB(Organization, temp_db_path, primary_key="id")
