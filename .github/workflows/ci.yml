@@ -86,7 +86,7 @@ jobs:
       run: make install
     
     - name: Run coverage report
-      run: uv run pytest --cov --cov-branch --cov-report=xml
+      run: uv run pytest --cov=src --cov-branch --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
