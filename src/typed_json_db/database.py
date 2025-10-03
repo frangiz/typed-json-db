@@ -37,14 +37,19 @@ class JsonSerializer:
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     @staticmethod
-    def object_hook_with_types(obj_dict, type_hints):
+    def object_hook_with_types(obj_dict, type_hints, max_depth=10):
         """
         Process JSON objects during deserialization using type hints.
 
         Args:
             obj_dict: Dictionary to process
             type_hints: Dictionary mapping field names to their type annotations
+            max_depth: Maximum recursion depth to prevent infinite recursion (default: 10)
         """
+        # Guard against excessive recursion
+        if max_depth <= 0:
+            return obj_dict
+
         for key, value in obj_dict.items():
             if key in type_hints:
                 field_type = type_hints[key]
@@ -61,10 +66,11 @@ class JsonSerializer:
                         ):
                             nested_type = args[0]
                             nested_type_hints = get_type_hints(nested_type)
+                            # Decrement depth for recursive calls
                             obj_dict[key] = [
                                 nested_type(
                                     **JsonSerializer.object_hook_with_types(
-                                        item, nested_type_hints
+                                        item, nested_type_hints, max_depth - 1
                                     )
                                 )
                                 for item in value
@@ -114,9 +120,9 @@ class JsonSerializer:
                     try:
                         # Get type hints for the nested dataclass
                         nested_type_hints = get_type_hints(field_type)
-                        # Recursively process the nested dictionary
+                        # Recursively process the nested dictionary with decremented depth
                         nested_dict = JsonSerializer.object_hook_with_types(
-                            value, nested_type_hints
+                            value, nested_type_hints, max_depth - 1
                         )
                         # Create the dataclass instance
                         obj_dict[key] = field_type(**nested_dict)
