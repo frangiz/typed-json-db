@@ -2,20 +2,21 @@
 
 [![codecov](https://codecov.io/gh/frangiz/typed-json-db/branch/main/graph/badge.svg?token=7W6IH9PXQO)](https://codecov.io/gh/frangiz/typed-json-db)
 
-A lightweight, type-safe JSON-based database for Python applications using dataclasses. Perfect for small projects, prototyping, and situations where you need a simple persistent storage solution with type safety.
+A lightweight, type-safe JSON-based database for Python applications using dataclasses. Perfect for small projects, prototyping, and situations where you need a simple persistent storage solution with full type safety.
 
 ## Features
 
-- 🚀 **Type-safe**: Uses Python dataclasses for structured data
+- 🚀 **Type-safe**: Uses Python dataclasses for structured data with full generic type support
 - 📁 **File-based**: Uses JSON files for storage - easy to inspect and backup
 - 🔍 **Query support**: Find records using attribute-based queries
 - 🔧 **CRUD operations**: Create, Read, Update, Delete operations
-- � **Primary key support**: Optional configurable primary key with uniqueness enforcement
+- 🔑 **Primary key support**: Optional configurable primary key with uniqueness enforcement and type safety
 - ⚡ **Indexing**: Automatic indexing for primary key operations for fast lookups
-- �📦 **Zero dependencies**: No external dependencies required
-- 🐍 **Type hints**: Full type hint support with generics
+- 📦 **Zero dependencies**: No external dependencies required
+- 🐍 **Advanced type hints**: Full type hint support with generics including primary key types
 - ✅ **Well tested**: Comprehensive test suite
 - 🆔 **UUID support**: Automatic handling of UUID fields
+- 🔄 **Nested dataclasses**: Supports lists of dataclasses and complex nested structures
 
 ## Installation
 
@@ -58,7 +59,8 @@ class User:
 db = JsonDB(User, Path("users.json"))
 
 # Or create with a primary key for better performance and uniqueness enforcement
-db = JsonDB(User, Path("users.json"), primary_key="id")
+# Note: JsonDB is generic over both data type and primary key type for better type safety
+db: JsonDB[User, uuid.UUID] = JsonDB(User, Path("users.json"), primary_key="id")
 
 # Add records
 user1 = User(
@@ -85,22 +87,40 @@ db.remove(user1.id)
 
 ## API Reference
 
-### JsonDB[T](data_class: Type[T], file_path: Path, primary_key: Optional[str] = None)
+### JsonDB[T, PK](data_class: Type[T], file_path: Path, primary_key: Optional[str] = None)
 
 Create a new type-safe database instance.
+
+**Type Parameters:**
+- `T`: The dataclass type this database will store
+- `PK`: The type of the primary key field (e.g., `str`, `int`, `uuid.UUID`)
 
 **Parameters:**
 - `data_class`: The dataclass type this database will store
 - `file_path`: Path to the JSON database file
 - `primary_key`: Optional field name to use as primary key for uniqueness and indexing
 
+**Example:**
+```python
+# Database with UUID primary key
+db: JsonDB[User, uuid.UUID] = JsonDB(User, Path("users.json"), primary_key="id")
+
+# Database with string primary key  
+db: JsonDB[Product, str] = JsonDB(Product, Path("products.json"), primary_key="sku")
+
+# Database without primary key
+db: JsonDB[LogEntry, Any] = JsonDB(LogEntry, Path("logs.json"))
+```
+
 ### Methods
 
 #### add(item: T) -> T
 Add a new item to the database and save automatically. If a primary key is configured, enforces uniqueness.
 
-#### get(primary_key_value: Any) -> Optional[T]
+#### get(primary_key_value: PK) -> Optional[T]
 Get an item by its primary key value. Returns None if not found. Requires a primary key to be configured.
+
+**Type Safety**: When using typed primary keys, IDEs will provide autocomplete and type checking for the key parameter.
 
 #### find(**kwargs) -> List[T]
 Find all items matching the given attribute criteria. Requires at least one search criterion.
@@ -111,7 +131,7 @@ Get all items in the database.
 #### update(item: T) -> T
 Update an existing item (by primary key) and save automatically. Requires a primary key to be configured.
 
-#### remove(primary_key_value: Any) -> bool
+#### remove(primary_key_value: PK) -> bool
 Remove an item by its primary key value. Returns True if removed, False if not found. Requires a primary key to be configured.
 
 #### save() -> None
@@ -130,19 +150,59 @@ class Product:
     name: str
     price: float
 
-# Use 'sku' as primary key
-db = JsonDB(Product, Path("products.json"), primary_key="sku")
+# Use 'sku' as primary key with proper typing
+db: JsonDB[Product, str] = JsonDB(Product, Path("products.json"), primary_key="sku")
 
 # Primary key operations are fast (O(1)) and enforce uniqueness
 product = Product(sku="ABC123", name="Widget", price=9.99)
 db.add(product)
 
-# Fast retrieval by primary key
-found = db.get("ABC123")
+# Fast retrieval by primary key - IDE knows key should be a string
+found = db.get("ABC123")  # Type-safe: expects str
 
 # Trying to add duplicate primary key raises an exception
 duplicate = Product(sku="ABC123", name="Another Widget", price=19.99)
 # db.add(duplicate)  # Raises JsonDBException
+```
+
+### Advanced Type Safety Examples
+
+The database supports full type safety including primary key types:
+
+```python
+import uuid
+from dataclasses import dataclass
+from typing import List
+
+@dataclass 
+class Address:
+    street: str
+    city: str
+    zip_code: str
+
+@dataclass
+class User:
+    id: uuid.UUID
+    name: str
+    addresses: List[Address]  # Nested dataclasses are supported
+    age: int
+
+# Full type safety with UUID primary key
+db: JsonDB[User, uuid.UUID] = JsonDB(User, Path("users.json"), primary_key="id")
+
+user_id = uuid.uuid4()
+user = User(
+    id=user_id,
+    name="Alice",
+    addresses=[Address("123 Main St", "Anytown", "12345")],
+    age=30
+)
+
+db.add(user)
+
+# Type-safe retrieval - IDE knows this expects UUID
+found_user = db.get(user_id)  # ✅ Correct type
+# found_user = db.get("string")  # ❌ Type checker will warn
 ```
 
 ### Database Operations Without Primary Key
@@ -171,6 +231,19 @@ The database automatically handles serialization/deserialization of:
 - Enum values  
 - datetime and date objects
 - Complex nested dataclass structures
+- Lists of dataclasses
+
+```python
+@dataclass
+class Order:
+    id: uuid.UUID
+    items: List[Product]  # List of dataclasses
+    created_at: datetime
+    status: Status  # Enum
+
+# All types are automatically serialized to/from JSON
+db: JsonDB[Order, uuid.UUID] = JsonDB(Order, Path("orders.json"), primary_key="id")
+```
 
 ### Performance and Indexing
 
@@ -183,8 +256,8 @@ When a primary key is configured, the database automatically creates an in-memor
 
 ```python
 # Fast O(1) operations with primary key
-db = JsonDB(User, Path("users.json"), primary_key="id")
-user = db.get(user_id)  # Very fast, uses index
+db: JsonDB[User, uuid.UUID] = JsonDB(User, Path("users.json"), primary_key="id")
+user = db.get(user_id)  # Very fast, uses index, type-safe
 
 # Linear search operations (still fast for reasonable dataset sizes)
 active_users = db.find(status=Status.ACTIVE)  # Searches all records

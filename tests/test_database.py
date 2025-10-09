@@ -43,7 +43,9 @@ def sample_item():
 @pytest.fixture
 def populated_db(temp_db_path):
     """Create a database with some test items."""
-    db = JsonDB(SampleItem, temp_db_path, primary_key="id")
+    db: JsonDB[SampleItem, uuid.UUID] = JsonDB(
+        SampleItem, temp_db_path, primary_key="id"
+    )
 
     # Add multiple items
     for i in range(3):
@@ -58,7 +60,9 @@ def populated_db(temp_db_path):
 @pytest.fixture
 def populated_db_no_pk(temp_db_path):
     """Create a database without a primary key with some test items."""
-    db = JsonDB(SampleItem, temp_db_path)  # No primary key
+    from typing import Any
+
+    db: JsonDB[SampleItem, Any] = JsonDB(SampleItem, temp_db_path)  # No primary key
 
     # Add multiple items
     for i in range(3):
@@ -1057,3 +1061,197 @@ class TestPrimaryKeyIndexing:
         assert found_item2 is not None
         assert found_item1.name == "Item 1"
         assert found_item2.name == "Item 2"
+
+
+class TestTypeSafety:
+    """Test type safety features of the JsonDB with different primary key types."""
+
+    def test_uuid_primary_key_typing(self, temp_db_path):
+        """Test JsonDB with UUID primary key type annotation."""
+
+        # Test with explicit type annotation
+        db: JsonDB[SampleItem, uuid.UUID] = JsonDB(
+            SampleItem, temp_db_path, primary_key="id"
+        )
+
+        # Add item
+        item_id = uuid.uuid4()
+        item = SampleItem(
+            id=item_id, name="Test Item", status=ItemStatus.PENDING, quantity=1
+        )
+        db.add(item)
+
+        # Retrieve by UUID - should work with type safety
+        retrieved = db.get(item_id)
+        assert retrieved is not None
+        assert retrieved.id == item_id
+        assert retrieved.name == "Test Item"
+
+        # Remove by UUID
+        assert db.remove(item_id) is True
+        assert db.get(item_id) is None
+
+    def test_string_primary_key_typing(self, temp_db_path):
+        """Test JsonDB with string primary key type annotation."""
+
+        @dataclass
+        class Product:
+            sku: str
+            name: str
+            price: float
+
+        db: JsonDB[Product, str] = JsonDB(Product, temp_db_path, primary_key="sku")
+
+        # Add product
+        product = Product(sku="ABC123", name="Widget", price=9.99)
+        db.add(product)
+
+        # Retrieve by string key
+        retrieved = db.get("ABC123")
+        assert retrieved is not None
+        assert retrieved.sku == "ABC123"
+        assert retrieved.name == "Widget"
+
+        # Remove by string key
+        assert db.remove("ABC123") is True
+        assert db.get("ABC123") is None
+
+    def test_integer_primary_key_typing(self, temp_db_path):
+        """Test JsonDB with integer primary key type annotation."""
+
+        @dataclass
+        class Order:
+            order_id: int
+            customer: str
+            total: float
+
+        db: JsonDB[Order, int] = JsonDB(Order, temp_db_path, primary_key="order_id")
+
+        # Add order
+        order = Order(order_id=12345, customer="John Doe", total=99.99)
+        db.add(order)
+
+        # Retrieve by integer key
+        retrieved = db.get(12345)
+        assert retrieved is not None
+        assert retrieved.order_id == 12345
+        assert retrieved.customer == "John Doe"
+
+        # Remove by integer key
+        assert db.remove(12345) is True
+        assert db.get(12345) is None
+
+    def test_mixed_type_usage(self, temp_db_path):
+        """Test that type annotations work correctly in mixed scenarios."""
+        from typing import Any
+
+        # Database without primary key - uses Any
+        db_no_pk: JsonDB[SampleItem, Any] = JsonDB(SampleItem, temp_db_path)
+
+        item = SampleItem(
+            id=uuid.uuid4(), name="Test", status=ItemStatus.PENDING, quantity=1
+        )
+        db_no_pk.add(item)
+
+        # Should work fine without primary key operations
+        all_items = db_no_pk.all()
+        assert len(all_items) == 1
+        assert all_items[0].name == "Test"
+
+        # Search operations should work
+        found_items = db_no_pk.find(name="Test")
+        assert len(found_items) == 1
+
+    def test_nested_dataclass_with_typing(self, temp_db_path):
+        """Test type annotations with nested dataclasses."""
+        from typing import List
+
+        @dataclass
+        class Address:
+            street: str
+            city: str
+            zip_code: str
+
+        @dataclass
+        class Person:
+            id: uuid.UUID
+            name: str
+            addresses: List[Address]
+            age: int
+
+        db: JsonDB[Person, uuid.UUID] = JsonDB(Person, temp_db_path, primary_key="id")
+
+        person_id = uuid.uuid4()
+        person = Person(
+            id=person_id,
+            name="Alice Johnson",
+            addresses=[
+                Address("123 Main St", "Anytown", "12345"),
+                Address("456 Oak Ave", "Other City", "67890"),
+            ],
+            age=30,
+        )
+
+        db.add(person)
+
+        # Retrieve and verify nested structure
+        retrieved = db.get(person_id)
+        assert retrieved is not None
+        assert retrieved.name == "Alice Johnson"
+        assert len(retrieved.addresses) == 2
+        assert isinstance(retrieved.addresses[0], Address)
+        assert retrieved.addresses[0].street == "123 Main St"
+        assert retrieved.addresses[1].city == "Other City"
+
+    def test_generic_type_preservation(self, temp_db_path):
+        """Test that generic types are preserved correctly."""
+        # Create database with specific types
+        db: JsonDB[SampleItem, uuid.UUID] = JsonDB(
+            SampleItem, temp_db_path, primary_key="id"
+        )
+
+        # Verify type hints are available
+        assert hasattr(db, "data_class")
+        assert hasattr(db, "primary_key")
+        assert hasattr(db, "type_hints")
+
+        # The actual runtime behavior should be identical
+        item_id = uuid.uuid4()
+        item = SampleItem(
+            id=item_id, name="Type Test", status=ItemStatus.ACTIVE, quantity=5
+        )
+
+        added_item = db.add(item)
+        assert isinstance(added_item, SampleItem)
+        assert added_item.id == item_id
+
+        retrieved_item = db.get(item_id)
+        assert isinstance(retrieved_item, SampleItem)
+        assert retrieved_item.name == "Type Test"
+
+    def test_primary_key_index_typing(self, temp_db_path):
+        """Test that primary key index works correctly with typed keys."""
+        db: JsonDB[SampleItem, uuid.UUID] = JsonDB(
+            SampleItem, temp_db_path, primary_key="id"
+        )
+
+        # Add multiple items
+        items = []
+        for i in range(5):
+            item_id = uuid.uuid4()
+            item = SampleItem(
+                id=item_id, name=f"Item {i}", status=ItemStatus.ACTIVE, quantity=i
+            )
+            items.append(item)
+            db.add(item)
+
+        # Verify index contains all UUID keys
+        assert len(db._primary_key_index) == 5
+
+        for item in items:
+            # Key should be in index
+            assert item.id in db._primary_key_index
+            # Retrieval should be fast (O(1) lookup)
+            retrieved = db.get(item.id)
+            assert retrieved is not None
+            assert retrieved.id == item.id

@@ -6,12 +6,14 @@ from datetime import datetime, date
 from enum import Enum
 from pathlib import Path
 from typing import (
+    Any,
     Dict,
     Generic,
     List,
     Optional,
     Type,
     TypeVar,
+    Union,
     get_type_hints,
     get_origin,
     get_args,
@@ -20,13 +22,14 @@ from typing import (
 from .exceptions import JsonDBException
 
 T = TypeVar("T")
+PK = TypeVar("PK")  # Primary Key type
 
 
 class JsonSerializer:
     """Helper class to serialize/deserialize special types to/from JSON."""
 
     @staticmethod
-    def default(obj):
+    def default(obj: Any) -> Any:
         """Convert objects to JSON-serializable types."""
         if isinstance(obj, uuid.UUID):
             return str(obj)
@@ -37,7 +40,9 @@ class JsonSerializer:
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     @staticmethod
-    def object_hook_with_types(obj_dict, type_hints, max_depth=10):
+    def object_hook_with_types(
+        obj_dict: Dict[str, Any], type_hints: Dict[str, Type[Any]], max_depth: int = 10
+    ) -> Dict[str, Any]:
         """
         Process JSON objects during deserialization using type hints.
 
@@ -132,7 +137,7 @@ class JsonSerializer:
         return obj_dict
 
 
-class JsonDB(Generic[T]):
+class JsonDB(Generic[T, PK]):
     """A simple JSON file-based database for dataclasses."""
 
     def __init__(
@@ -152,7 +157,7 @@ class JsonDB(Generic[T]):
         self.data: List[T] = []
 
         # Primary key index for performance optimization
-        self._primary_key_index: Dict = {}
+        self._primary_key_index: Dict[Union[PK, Any], int] = {}
 
         # Extract type hints from the dataclass
         self.type_hints = get_type_hints(data_class)
@@ -201,7 +206,7 @@ class JsonDB(Generic[T]):
         except (TypeError, OverflowError) as e:
             raise JsonDBException(f"Error serializing to JSON: {e}")
 
-    def _dict_to_dataclass(self, data_dict: Dict) -> T:
+    def _dict_to_dataclass(self, data_dict: Dict[str, Any]) -> T:
         """Convert a dictionary to the specified dataclass."""
         return self.data_class(**data_dict)
 
@@ -213,7 +218,7 @@ class JsonDB(Generic[T]):
         """Get all items."""
         return self.data.copy()
 
-    def get(self, key_value) -> Optional[T]:
+    def get(self, key_value: Union[PK, Any]) -> Optional[T]:
         """Get item by primary key value."""
         if self.primary_key is None:
             raise JsonDBException("Cannot use get() without a primary key configured")
@@ -225,7 +230,7 @@ class JsonDB(Generic[T]):
 
         return None
 
-    def find(self, **kwargs) -> List[T]:
+    def find(self, **kwargs: Any) -> List[T]:
         """Find items matching the given criteria."""
         if not kwargs:
             raise JsonDBException(
@@ -332,7 +337,7 @@ class JsonDB(Generic[T]):
 
         raise JsonDBException(f"Item with {self.primary_key}='{key_value}' not found")
 
-    def remove(self, key_value) -> bool:
+    def remove(self, key_value: Union[PK, Any]) -> bool:
         """Remove an item by primary key value."""
         if self.primary_key is None:
             raise JsonDBException(
