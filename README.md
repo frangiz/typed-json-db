@@ -1,6 +1,6 @@
 # Typed JSON DB
 
-[![codecov](https://codecov.io/gh/frangiz/typed-json-db/branch/main/graph/badge.svg?token=7W6IH9PXQO)](https://codecov.io/gh/frangiz/typed-json-db)
+![PyPI - Version](https://img.shields.io/pypi/v/typed-json-db) [![codecov](https://codecov.io/gh/frangiz/typed-json-db/branch/main/graph/badge.svg?token=7W6IH9PXQO)](https://codecov.io/gh/frangiz/typed-json-db)
 
 A lightweight, type-safe JSON-based database for Python applications using dataclasses. Choose between two database types based on your needs:
 
