@@ -6,6 +6,7 @@ from datetime import datetime, date
 from enum import Enum
 from pathlib import Path
 from typing import (
+    Any,
     Dict,
     Generic,
     List,
@@ -20,14 +21,33 @@ from typing import (
 from .exceptions import JsonDBException
 
 T = TypeVar("T")
+PK = TypeVar("PK")  # Primary Key type
 
 
 class JsonSerializer:
     """Helper class to serialize/deserialize special types to/from JSON."""
 
     @staticmethod
-    def default(obj):
-        """Convert objects to JSON-serializable types."""
+    def default(obj: Any) -> Any:
+        """
+        Convert special Python objects to JSON-serializable types.
+
+        This method is intended to be used as the `default` function for `json.dumps`.
+
+        Args:
+            obj (Any): The object to convert.
+
+        Returns:
+            Any: A JSON-serializable representation of the object.
+
+        Supported types:
+            - uuid.UUID: converted to string
+            - datetime, date: converted to ISO 8601 string
+            - Enum: converted to its value
+
+        Raises:
+            TypeError: If the object type is not supported for JSON serialization.
+        """
         if isinstance(obj, uuid.UUID):
             return str(obj)
         if isinstance(obj, (datetime, date)):
@@ -37,7 +57,9 @@ class JsonSerializer:
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     @staticmethod
-    def object_hook_with_types(obj_dict, type_hints, max_depth=10):
+    def object_hook_with_types(
+        obj_dict: Dict[str, Any], type_hints: Dict[str, Type[Any]], max_depth: int = 10
+    ) -> Dict[str, Any]:
         """
         Process JSON objects during deserialization using type hints.
 
@@ -135,39 +157,22 @@ class JsonSerializer:
 class JsonDB(Generic[T]):
     """A simple JSON file-based database for dataclasses."""
 
-    def __init__(
-        self, data_class: Type[T], file_path: Path, primary_key: Optional[str] = None
-    ):
+    def __init__(self, data_class: Type[T], file_path: Path):
         """
         Initialize the database with a dataclass type and file path.
 
         Args:
             data_class: The dataclass type this database will store
             file_path: Path to the JSON file
-            primary_key: The field name to use as primary key (optional)
         """
         self.data_class = data_class
         self.file_path = file_path
-        self.primary_key = primary_key
         self.data: List[T] = []
-
-        # Primary key index for performance optimization
-        self._primary_key_index: Dict = {}
 
         # Extract type hints from the dataclass
         self.type_hints = get_type_hints(data_class)
 
-        # Validate primary key exists in dataclass if specified
-        if primary_key is not None and primary_key not in self.type_hints:
-            raise JsonDBException(
-                f"Primary key '{primary_key}' not found in {data_class.__name__} fields"
-            )
-
         self._load()
-
-        # Build primary key index if primary key is specified
-        if self.primary_key:
-            self._rebuild_primary_key_index()
 
     def _load(self) -> None:
         """Load data from the JSON file."""
@@ -201,7 +206,7 @@ class JsonDB(Generic[T]):
         except (TypeError, OverflowError) as e:
             raise JsonDBException(f"Error serializing to JSON: {e}")
 
-    def _dict_to_dataclass(self, data_dict: Dict) -> T:
+    def _dict_to_dataclass(self, data_dict: Dict[str, Any]) -> T:
         """Convert a dictionary to the specified dataclass."""
         return self.data_class(**data_dict)
 
@@ -213,32 +218,14 @@ class JsonDB(Generic[T]):
         """Get all items."""
         return self.data.copy()
 
-    def get(self, key_value) -> Optional[T]:
-        """Get item by primary key value."""
-        if self.primary_key is None:
-            raise JsonDBException("Cannot use get() without a primary key configured")
-
-        # Use primary key index for O(1) lookup
-        if key_value in self._primary_key_index:
-            item_index = self._primary_key_index[key_value]
-            return self.data[item_index]
-
-        return None
-
-    def find(self, **kwargs) -> List[T]:
+    def find(self, **kwargs: Any) -> List[T]:
         """Find items matching the given criteria."""
         if not kwargs:
             raise JsonDBException(
                 "find() requires at least one search criterion. Use all() to get all items."
             )
 
-        # Use primary key index if searching by primary key only
-        if self.primary_key and len(kwargs) == 1 and self.primary_key in kwargs:
-            key_value = kwargs[self.primary_key]
-            item = self.get(key_value)
-            return [item] if item else []
-
-        # Fall back to linear search for other criteria
+        # Linear search for all criteria
         results = []
         for item in self.data:
             match = True
@@ -269,30 +256,105 @@ class JsonDB(Generic[T]):
                 f"Item must be of type {self.data_class.__name__}, got {type(item).__name__}"
             )
 
-        # Only check primary key constraints if primary key is configured
-        if self.primary_key is not None:
-            # Check if item has primary key
-            if not hasattr(item, self.primary_key):
-                raise JsonDBException(
-                    f"Item must have a '{self.primary_key}' attribute"
-                )
-
-            # Check for primary key uniqueness
-            key_value = getattr(item, self.primary_key)
-            if self.get(key_value) is not None:
-                raise JsonDBException(
-                    f"Item with {self.primary_key}='{key_value}' already exists"
-                )
-
         self.data.append(item)
+        self.save()
+
+        return item
+
+
+class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
+    """A JSON file-based database for dataclasses with primary key support."""
+
+    def __init__(self, data_class: Type[T], file_path: Path, primary_key: str):
+        """
+        Initialize the database with a dataclass type and file path.
+
+        Args:
+            data_class: The dataclass type this database will store
+            file_path: Path to the JSON file
+            primary_key: The field name to use as primary key (required)
+        """
+        # Validate primary key is not None, empty, or whitespace-only
+        if primary_key is None:
+            raise JsonDBException("Primary key cannot be None")
+        if not primary_key or not primary_key.strip():
+            raise JsonDBException("Primary key cannot be empty or whitespace-only")
+
+        self.primary_key = primary_key
+
+        # Primary key index for performance optimization
+        self._primary_key_index: Dict[PK, int] = {}
+
+        # Validate primary key exists in dataclass
+        type_hints = get_type_hints(data_class)
+        if primary_key not in type_hints:
+            raise JsonDBException(
+                f"Primary key '{primary_key}' not found in {data_class.__name__} fields"
+            )
+
+        # Initialize the parent class
+        super().__init__(data_class, file_path)
+
+        # Build primary key index
+        self._rebuild_primary_key_index()
+
+    def get(self, key_value: PK) -> Optional[T]:
+        """Get item by primary key value."""
+        # Use primary key index for O(1) lookup
+        if key_value in self._primary_key_index:
+            item_index = self._primary_key_index[key_value]
+            return self.data[item_index]
+
+        return None
+
+    def find(self, **kwargs: Any) -> List[T]:
+        """Find items matching the given criteria."""
+        if not kwargs:
+            raise JsonDBException(
+                "find() requires at least one search criterion. Use all() to get all items."
+            )
+
+        # Use primary key index if searching by primary key only
+        if len(kwargs) == 1 and self.primary_key in kwargs:
+            key_value = kwargs[self.primary_key]
+            item = self.get(key_value)
+            return [item] if item else []
+
+        # Fall back to parent's linear search for other criteria
+        return super().find(**kwargs)
+
+    def add(self, item: T) -> T:
+        """
+        Add an item to the database.
+
+        Args:
+            item: The item to add, must be of the correct type
+
+        Returns:
+            The added item
+
+        Raises:
+            JsonDBException: If the item is not of the expected type or primary key already exists
+        """
+        # Check if item has primary key
+        if not hasattr(item, self.primary_key):
+            raise JsonDBException(f"Item must have a '{self.primary_key}' attribute")
+
+        # Check for primary key uniqueness
+        key_value = getattr(item, self.primary_key)
+        if self.get(key_value) is not None:
+            raise JsonDBException(
+                f"Item with {self.primary_key}='{key_value}' already exists"
+            )
+
+        # Call parent's add method
+        result = super().add(item)
 
         # Update primary key index
-        if self.primary_key:
-            key_value = getattr(item, self.primary_key)
-            self._primary_key_index[key_value] = len(self.data) - 1
+        key_value = getattr(item, self.primary_key)
+        self._primary_key_index[key_value] = len(self.data) - 1
 
-        self.save()
-        return item
+        return result
 
     def update(self, item: T) -> T:
         """
@@ -307,11 +369,6 @@ class JsonDB(Generic[T]):
         Raises:
             JsonDBException: If the item is not of the expected type, has no primary key, or the key doesn't exist
         """
-        if self.primary_key is None:
-            raise JsonDBException(
-                "Cannot use update() without a primary key configured"
-            )
-
         if not isinstance(item, self.data_class):
             raise JsonDBException(
                 f"Item must be of type {self.data_class.__name__}, got {type(item).__name__}"
@@ -332,13 +389,8 @@ class JsonDB(Generic[T]):
 
         raise JsonDBException(f"Item with {self.primary_key}='{key_value}' not found")
 
-    def remove(self, key_value) -> bool:
+    def remove(self, key_value: PK) -> bool:
         """Remove an item by primary key value."""
-        if self.primary_key is None:
-            raise JsonDBException(
-                "Cannot use remove() without a primary key configured"
-            )
-
         for i, item in enumerate(self.data):
             if (
                 hasattr(item, self.primary_key)
@@ -347,8 +399,7 @@ class JsonDB(Generic[T]):
                 self.data.pop(i)
 
                 # Rebuild primary key index since indices have shifted
-                if self.primary_key:
-                    self._rebuild_primary_key_index()
+                self._rebuild_primary_key_index()
 
                 self.save()
                 return True
@@ -356,9 +407,6 @@ class JsonDB(Generic[T]):
 
     def _rebuild_primary_key_index(self) -> None:
         """Rebuild the primary key index for fast lookups."""
-        if not self.primary_key:
-            return
-
         self._primary_key_index = {}
         for i, item in enumerate(self.data):
             if hasattr(item, self.primary_key):

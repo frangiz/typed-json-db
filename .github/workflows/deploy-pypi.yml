@@ -96,6 +96,6 @@ jobs:
           ```
           
           ### 📋 Changes
-          See the [commit history](https://github.com/${{ github.repository }}/commits/v${{ steps.current-version.outputs.VERSION }}) for detailed changes in this release.
+          See the [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) and [commit history](https://github.com/${{ github.repository }}/commits/v${{ steps.current-version.outputs.VERSION }}) for detailed changes in this release.
         draft: false
         prerelease: false
