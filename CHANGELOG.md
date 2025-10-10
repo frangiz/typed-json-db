@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2025-10-10
 
 ### Added
 - New `IndexedJsonDB` class for advanced database operations with primary key support
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - For advanced operations with primary keys: Use `IndexedJsonDB(DataClass, path, primary_key="field")`
 - Update imports to include `IndexedJsonDB` if you need primary key functionality
 
-## [0.2.3] - 2024-XX-XX
+## [0.2.3] - 2025-XX-XX
 
 ### Added
 - Comprehensive test suite
@@ -42,20 +42,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved error messages and exception handling
 
-## [0.2.2] - 2024-XX-XX
+## [0.2.2] - 2025-XX-XX
 
 ### Added
 - Enhanced UUID support
 - Better serialization for datetime objects
 - Support for Enum types
 
-## [0.2.1] - 2024-XX-XX
+## [0.2.1] - 2025-XX-XX
 
 ### Fixed
 - Serialization issues with complex types
 - File handling improvements
 
-## [0.2.0] - 2024-XX-XX
+## [0.2.0] - 2025-XX-XX
 
 ### Added
 - Generic type support
@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved performance for large datasets
 
-## [0.1.0] - 2024-XX-XX
+## [0.1.0] - 2025-XX-XX
 
 ### Added
 - Initial release
