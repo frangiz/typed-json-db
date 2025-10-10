@@ -66,7 +66,7 @@ Use `JsonDB` when you need basic storage without primary key constraints:
 db = JsonDB(User, Path("users.json"))
 
 # Available operations
-db.add(item)                    # Add new items
+db.add(item)                   # Add new items
 db.find(field=value)           # Query by any field  
 db.all()                       # Get all items
 db.save()                      # Manual save (auto-saves on add)
