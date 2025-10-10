@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import get_type_hints
+from typing import get_type_hints, Any
 
 from src.typed_json_db import JsonDB, IndexedJsonDB, JsonDBException, JsonSerializer
 
@@ -60,8 +60,6 @@ def populated_db(temp_db_path):
 @pytest.fixture
 def populated_db_no_pk(temp_db_path):
     """Create a database without a primary key with some test items."""
-    from typing import Any
-
     db: JsonDB[SampleItem, Any] = JsonDB(SampleItem, temp_db_path)  # No primary key
 
     # Add multiple items
@@ -151,6 +149,27 @@ class TestJsonDB:
         assert "Primary key 'nonexistent_field' not found in SampleItem fields" in str(
             exc_info.value
         )
+
+    def test_init_with_empty_primary_key(self, temp_db_path):
+        """Test initializing IndexedJsonDB with an empty primary key."""
+        with pytest.raises(JsonDBException) as exc_info:
+            IndexedJsonDB(SampleItem, temp_db_path, primary_key="")
+
+        assert "Primary key cannot be empty or whitespace-only" in str(exc_info.value)
+
+    def test_init_with_whitespace_primary_key(self, temp_db_path):
+        """Test initializing IndexedJsonDB with a whitespace-only primary key."""
+        with pytest.raises(JsonDBException) as exc_info:
+            IndexedJsonDB(SampleItem, temp_db_path, primary_key="   ")
+
+        assert "Primary key cannot be empty or whitespace-only" in str(exc_info.value)
+
+    def test_init_with_none_primary_key(self, temp_db_path):
+        """Test initializing IndexedJsonDB with None as primary key."""
+        with pytest.raises(JsonDBException) as exc_info:
+            IndexedJsonDB(SampleItem, temp_db_path, primary_key=None)
+
+        assert "Primary key cannot be None" in str(exc_info.value)
 
     def test_init_without_primary_key(self, temp_db_path):
         """Test initializing a JsonDB without a primary key."""

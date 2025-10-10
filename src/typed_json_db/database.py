@@ -29,7 +29,25 @@ class JsonSerializer:
 
     @staticmethod
     def default(obj: Any) -> Any:
-        """Convert objects to JSON-serializable types."""
+        """
+        Convert special Python objects to JSON-serializable types.
+
+        This method is intended to be used as the `default` function for `json.dumps`.
+
+        Args:
+            obj (Any): The object to convert.
+
+        Returns:
+            Any: A JSON-serializable representation of the object.
+
+        Supported types:
+            - uuid.UUID: converted to string
+            - datetime, date: converted to ISO 8601 string
+            - Enum: converted to its value
+
+        Raises:
+            TypeError: If the object type is not supported for JSON serialization.
+        """
         if isinstance(obj, uuid.UUID):
             return str(obj)
         if isinstance(obj, (datetime, date)):
@@ -256,9 +274,11 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
             file_path: Path to the JSON file
             primary_key: The field name to use as primary key (required)
         """
-        # Validate primary key is not empty
+        # Validate primary key is not None, empty, or whitespace-only
+        if primary_key is None:
+            raise JsonDBException("Primary key cannot be None")
         if not primary_key or not primary_key.strip():
-            raise JsonDBException("Primary key cannot be empty or None")
+            raise JsonDBException("Primary key cannot be empty or whitespace-only")
 
         self.primary_key = primary_key
 
