@@ -1,11 +1,12 @@
 """Simple JSON Database - A lightweight JSON-based database for Python applications."""
 
-from .database import JsonDB, JsonSerializer
+from .database import JsonDB, IndexedJsonDB, JsonSerializer
 from .exceptions import JsonDBException
 
 __version__ = "0.2.3"
 __all__ = [
     "JsonDB",
+    "IndexedJsonDB",
     "JsonSerializer",
     "JsonDBException",
 ]
