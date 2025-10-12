@@ -20,7 +20,7 @@ jobs:
         enable-cache: true
     
     - name: Set up Python
-      run: uv python install 3.13
+      run: uv python install 3.14
     
     - name: Install dependencies
       run: make install
@@ -45,10 +45,12 @@ jobs:
             python-version: "3.12" 
           - os: ubuntu-latest
             python-version: "3.13"
+          - os: ubuntu-latest
+            python-version: "3.14"
           - os: windows-latest
-            python-version: "3.13"  # Test latest Python on Windows
+            python-version: "3.14"  # Test latest Python on Windows
           - os: macos-latest
-            python-version: "3.13"  # Test latest Python on macOS
+            python-version: "3.14"  # Test latest Python on macOS
     
     steps:
     - uses: actions/checkout@v5
@@ -80,7 +82,7 @@ jobs:
         enable-cache: true
     
     - name: Set up Python
-      run: uv python install 3.13
+      run: uv python install 3.14
     
     - name: Install dependencies
       run: make install
@@ -106,7 +108,7 @@ jobs:
         enable-cache: true
     
     - name: Set up Python
-      run: uv python install 3.13
+      run: uv python install 3.14
     
     - name: Install dependencies
       run: make install
