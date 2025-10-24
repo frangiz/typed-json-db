@@ -10,16 +10,13 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Etc/UTC"
-    # Group all minor and patch updates together
+    # Group all dependency updates together into a single PR
     groups:
-      minor-and-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
-    # Only create PRs for security updates and major version bumps individually
-    open-pull-requests-limit: 5
+    # Limit to 1 PR since we're grouping everything
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "deps"
       prefix-development: "deps-dev"
@@ -33,7 +30,13 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Etc/UTC"
-    open-pull-requests-limit: 3
+    # Group all GitHub Actions updates together
+    groups:
+      all-actions:
+        patterns:
+          - "*"
+    # Limit to 1 PR since we're grouping everything
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "ci"
       include: "scope"
