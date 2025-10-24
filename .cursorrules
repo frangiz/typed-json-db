@@ -26,6 +26,27 @@
 - Prioritize maintainability over cleverness
 - When optimizing, measure first
 
+## Changelog Rules
+**Only update CHANGELOG.md if changes affect package USERS, not internal development.**
+
+### INCLUDE changes like:
+- New features, methods, or classes
+- Breaking API changes
+- Bug fixes that affect functionality
+- Performance improvements users will notice
+- Security fixes
+- Deprecated features
+
+### DO NOT INCLUDE changes like:
+- CI/CD configuration (GitHub Actions, etc.)
+- Dependabot configuration
+- Development tooling changes
+- Repository maintenance
+- Code formatting or linting changes
+- Documentation typos or minor updates
+- Test-only changes
+- Build system changes that don't affect the public API
+
 ## Tools & Commands
 - Use `make` commands consistently (check Makefile)
 - **Always use `uv run python` instead of direct `python` commands**
