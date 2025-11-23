@@ -1,7 +1,7 @@
 import json
 import uuid
 import inspect
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, date
 from enum import Enum
 from pathlib import Path
@@ -85,7 +85,7 @@ class JsonSerializer:
                     if args:
                         # Get the non-None type from Optional
                         actual_type = next(
-                            (arg for arg in args if arg is not type(None)), field_type
+                            (arg for arg in args if arg != type(None)), field_type
                         )
                         origin_type = get_origin(actual_type)
 
@@ -269,10 +269,14 @@ class JsonDB(Generic[T]):
             )
         # Automatically set timestamps if item has created_at and/or updated_at fields
         now = datetime.now()
+        updates = {}
         if hasattr(item, "created_at") and getattr(item, "created_at") is None:
-            setattr(item, "created_at", now)
+            updates["created_at"] = now
         if hasattr(item, "updated_at") and getattr(item, "updated_at") is None:
-            setattr(item, "updated_at", now)
+            updates["updated_at"] = now
+
+        if updates:
+            item = replace(item, **updates)
 
         self.data.append(item)
         self.save()
@@ -397,7 +401,7 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
 
         # Update the updated_at timestamp if item has it
         if hasattr(item, "updated_at"):
-            setattr(item, "updated_at", datetime.now())
+            item = replace(item, updated_at=datetime.now())
 
         key_value = getattr(item, self.primary_key)
         for i, existing_item in enumerate(self.data):
