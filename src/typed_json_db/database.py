@@ -267,13 +267,12 @@ class JsonDB(Generic[T]):
             raise JsonDBException(
                 f"Item must be of type {self.data_class.__name__}, got {type(item).__name__}"
             )
-        # Automatically set timestamps if item has created_at and updated_at fields
-        if hasattr(item, "created_at") and hasattr(item, "updated_at"):
-            now = datetime.now()
-            if getattr(item, "created_at") is None:
-                setattr(item, "created_at", now)
-            if getattr(item, "updated_at") is None:
-                setattr(item, "updated_at", now)
+        # Automatically set timestamps if item has created_at and/or updated_at fields
+        now = datetime.now()
+        if hasattr(item, "created_at") and getattr(item, "created_at") is None:
+            setattr(item, "created_at", now)
+        if hasattr(item, "updated_at") and getattr(item, "updated_at") is None:
+            setattr(item, "updated_at", now)
 
         self.data.append(item)
         self.save()
