@@ -2,6 +2,7 @@
 
 from .database import JsonDB, IndexedJsonDB, JsonSerializer
 from .exceptions import JsonDBException
+from .models import Timestamped
 
 __version__ = "0.3.0"
 __all__ = [
@@ -9,6 +10,7 @@ __all__ = [
     "IndexedJsonDB",
     "JsonSerializer",
     "JsonDBException",
+    "Timestamped",
 ]
 
 

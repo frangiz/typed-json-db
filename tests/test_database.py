@@ -1241,3 +1241,137 @@ class TestTypeSafety:
             retrieved = db.get(item.id)
             assert retrieved is not None
             assert retrieved.id == item.id
+
+
+class TestTimestamped:
+    """Tests for Timestamped model integration."""
+
+    def test_add_with_timestamped_auto_sets_timestamps(self, temp_db_path):
+        """Test that add() automatically sets created and updated timestamps."""
+        from datetime import datetime
+        from src.typed_json_db import Timestamped
+
+        @dataclass
+        class TimestampedItem(Timestamped):
+            id: uuid.UUID
+            name: str
+
+        db: JsonDB[TimestampedItem] = JsonDB(TimestampedItem, temp_db_path)
+
+        # Create item without timestamps
+        item = TimestampedItem(id=uuid.uuid4(), name="Test")
+
+        before_add = datetime.now()
+        added_item = db.add(item)
+        after_add = datetime.now()
+
+        # Timestamps should be set
+        assert added_item.created_at is not None
+        assert added_item.updated_at is not None
+        assert before_add <= added_item.created_at <= after_add
+        assert before_add <= added_item.updated_at <= after_add
+
+    def test_add_with_timestamped_preserves_existing_timestamps(self, temp_db_path):
+        """Test that add() preserves timestamps if already set."""
+        from datetime import datetime, timedelta
+        from src.typed_json_db import Timestamped
+
+        @dataclass
+        class TimestampedItem(Timestamped):
+            id: uuid.UUID
+            name: str
+
+        db: JsonDB[TimestampedItem] = JsonDB(TimestampedItem, temp_db_path)
+
+        # Create item with specific timestamps
+        past_time = datetime.now() - timedelta(days=1)
+        item = TimestampedItem(
+            id=uuid.uuid4(), name="Test", created_at=past_time, updated_at=past_time
+        )
+
+        added_item = db.add(item)
+
+        # Original timestamps should be preserved
+        assert added_item.created_at == past_time
+        assert added_item.updated_at == past_time
+
+    def test_update_with_timestamped_updates_timestamp(self, temp_db_path):
+        """Test that update() automatically updates the updated timestamp."""
+        from datetime import datetime
+        from src.typed_json_db import Timestamped
+        from time import sleep
+
+        @dataclass
+        class TimestampedItem(Timestamped):
+            id: uuid.UUID
+            name: str
+
+        db: IndexedJsonDB[TimestampedItem, uuid.UUID] = IndexedJsonDB(
+            TimestampedItem, temp_db_path, primary_key="id"
+        )
+
+        # Add item
+        item_id = uuid.uuid4()
+        item = TimestampedItem(id=item_id, name="Original")
+        added_item = db.add(item)
+
+        original_created = added_item.created_at
+        original_updated = added_item.updated_at
+
+        # Small delay to ensure timestamp difference
+        sleep(0.01)
+
+        # Update item
+        updated_item = TimestampedItem(
+            id=item_id,
+            name="Updated",
+            created_at=original_created,
+            updated_at=original_updated,
+        )
+
+        before_update = datetime.now()
+        result = db.update(updated_item)
+        after_update = datetime.now()
+
+        # created_at should remain the same, updated_at should be new
+        assert result.created_at == original_created
+        assert result.updated_at != original_updated
+        assert before_update <= result.updated_at <= after_update
+
+    def test_timestamped_persistence(self, temp_db_path):
+        """Test that timestamps are correctly saved and loaded from JSON."""
+        from src.typed_json_db import Timestamped
+
+        @dataclass
+        class TimestampedItem(Timestamped):
+            id: uuid.UUID
+            name: str
+
+        # Create and add item
+        db1: IndexedJsonDB[TimestampedItem, uuid.UUID] = IndexedJsonDB(
+            TimestampedItem, temp_db_path, primary_key="id"
+        )
+        item_id = uuid.uuid4()
+        item = TimestampedItem(id=item_id, name="Test")
+        added_item = db1.add(item)
+
+        # Reload database
+        db2: IndexedJsonDB[TimestampedItem, uuid.UUID] = IndexedJsonDB(
+            TimestampedItem, temp_db_path, primary_key="id"
+        )
+
+        retrieved_item = db2.get(item_id)
+        assert retrieved_item is not None
+        assert retrieved_item.created_at == added_item.created_at
+        assert retrieved_item.updated_at == added_item.updated_at
+
+    def test_non_timestamped_class_unaffected(self, temp_db_path, sample_item):
+        """Test that non-Timestamped classes are not affected by timestamp logic."""
+        db: JsonDB[SampleItem] = JsonDB(SampleItem, temp_db_path)
+
+        # SampleItem doesn't inherit from Timestamped
+        added_item = db.add(sample_item)
+
+        # Should not have created_at or updated_at fields
+        assert not hasattr(added_item, "created_at")
+        assert not hasattr(added_item, "updated_at")
