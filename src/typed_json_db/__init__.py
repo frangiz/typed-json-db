@@ -4,7 +4,7 @@ from .database import JsonDB, IndexedJsonDB, JsonSerializer
 from .exceptions import JsonDBException
 from .models import Timestamped
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = [
     "JsonDB",
     "IndexedJsonDB",

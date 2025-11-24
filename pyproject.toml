@@ -1,6 +1,6 @@
 [project]
 name = "typed-json-db"
-version = "0.3.0"
+version = "0.3.1"
 description = "A simple JSON-based database for Python applications"
 readme = "README.md"
 license = { file = "LICENSE" }
