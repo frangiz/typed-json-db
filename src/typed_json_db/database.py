@@ -85,7 +85,7 @@ class JsonSerializer:
                     if args:
                         # Get the non-None type from Optional
                         actual_type = next(
-                            (arg for arg in args if arg != type(None)), field_type
+                            (arg for arg in args if arg is not type(None)), field_type
                         )
                         origin_type = get_origin(actual_type)
 
