@@ -138,6 +138,25 @@ user = db.get(user_id)  # ✅ Expects UUID
 # user = db.get("string")  # ❌ Type error
 ```
 
+### Automatic Timestamps
+
+Use `Timestamped` base class for automatic timestamp management:
+
+```python
+from typed_json_db import Timestamped
+
+@dataclass
+class Article(Timestamped):
+    id: uuid.UUID
+    title: str
+    # created_at and updated_at fields inherited automatically
+
+db = IndexedJsonDB(Article, Path("articles.json"), primary_key="id")
+article = Article(id=uuid.uuid4(), title="Hello")
+db.add(article)  # created_at and updated_at set automatically
+db.update(article)  # updated_at timestamp refreshed
+```
+
 ### Automatic Type Conversion
 
 Supports automatic serialization of:

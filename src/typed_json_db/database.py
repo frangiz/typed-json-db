@@ -1,7 +1,7 @@
 import json
 import uuid
 import inspect
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, date
 from enum import Enum
 from pathlib import Path
@@ -13,6 +13,7 @@ from typing import (
     Optional,
     Type,
     TypeVar,
+    Union,
     get_type_hints,
     get_origin,
     get_args,
@@ -77,6 +78,17 @@ class JsonSerializer:
                 field_type = type_hints[key]
                 origin_type = get_origin(field_type)
 
+                # Extract actual type from Optional[T] (which is Union[T, None])
+                actual_type = field_type
+                if origin_type is Union:
+                    args = get_args(field_type)
+                    if args:
+                        # Get the non-None type from Optional
+                        actual_type = next(
+                            (arg for arg in args if arg is not type(None)), field_type
+                        )
+                        origin_type = get_origin(actual_type)
+
                 # Handle List of dataclasses
                 if origin_type is list and isinstance(value, list):
                     try:
@@ -116,7 +128,7 @@ class JsonSerializer:
                         pass
 
                 # Handle datetime fields
-                elif field_type == datetime and isinstance(value, str):
+                elif actual_type == datetime and isinstance(value, str):
                     try:
                         obj_dict[key] = datetime.fromisoformat(value)
                     except ValueError:
@@ -124,30 +136,30 @@ class JsonSerializer:
 
                 # Handle enum fields
                 elif (
-                    inspect.isclass(field_type)
-                    and issubclass(field_type, Enum)
+                    inspect.isclass(actual_type)
+                    and issubclass(actual_type, Enum)
                     and isinstance(value, (str, int))
                 ):
                     try:
-                        obj_dict[key] = field_type(value)
+                        obj_dict[key] = actual_type(value)
                     except (ValueError, KeyError):
                         pass
 
                 # Handle nested dataclass fields
                 elif (
-                    inspect.isclass(field_type)
-                    and hasattr(field_type, "__dataclass_fields__")
+                    inspect.isclass(actual_type)
+                    and hasattr(actual_type, "__dataclass_fields__")
                     and isinstance(value, dict)
                 ):
                     try:
                         # Get type hints for the nested dataclass
-                        nested_type_hints = get_type_hints(field_type)
+                        nested_type_hints = get_type_hints(actual_type)
                         # Recursively process the nested dictionary with decremented depth
                         nested_dict = JsonSerializer.object_hook_with_types(
                             value, nested_type_hints, max_depth - 1
                         )
                         # Create the dataclass instance
-                        obj_dict[key] = field_type(**nested_dict)
+                        obj_dict[key] = actual_type(**nested_dict)
                     except (TypeError, ValueError):
                         pass
 
@@ -255,6 +267,16 @@ class JsonDB(Generic[T]):
             raise JsonDBException(
                 f"Item must be of type {self.data_class.__name__}, got {type(item).__name__}"
             )
+        # Automatically set timestamps if item has created_at and/or updated_at fields
+        now = datetime.now()
+        updates = {}
+        if hasattr(item, "created_at") and getattr(item, "created_at") is None:
+            updates["created_at"] = now
+        if hasattr(item, "updated_at") and getattr(item, "updated_at") is None:
+            updates["updated_at"] = now
+
+        if updates:
+            item = replace(item, **updates)
 
         self.data.append(item)
         self.save()
@@ -376,6 +398,10 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
 
         if not hasattr(item, self.primary_key):
             raise JsonDBException(f"Item must have a '{self.primary_key}' attribute")
+
+        # Update the updated_at timestamp if item has it
+        if hasattr(item, "updated_at"):
+            item = replace(item, updated_at=datetime.now())
 
         key_value = getattr(item, self.primary_key)
         for i, existing_item in enumerate(self.data):
