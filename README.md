@@ -70,7 +70,7 @@ db.add(item)                   # Add new items
 db.find(field=value)           # Query by any field  
 db.delete(field=value)         # Delete items matching criteria, returns count
 db.all()                       # Get all items
-db.save()                      # Manual save (auto-saves on add)
+db.save()                      # Manual save (add and delete auto-save)
 ```
 
 ### IndexedJsonDB - Advanced Storage  

@@ -373,6 +373,26 @@ class TestJsonDB:
         for item in populated_db.data:
             assert populated_db.get(item.id) is item
 
+    def test_delete_by_primary_key(self, populated_db):
+        """Test deleting by primary key only (fast-path via the index)."""
+        target = populated_db.all()[0]
+
+        deleted = populated_db.delete(id=target.id)
+
+        assert deleted == 1
+        assert populated_db.get(target.id) is None
+        assert len(populated_db.data) == 2
+        # Remaining items must still resolve through the index
+        for item in populated_db.data:
+            assert populated_db.get(item.id) is item
+
+    def test_delete_by_nonexistent_primary_key(self, populated_db):
+        """Test deleting by a primary key that does not exist."""
+        deleted = populated_db.delete(id=uuid.uuid4())
+
+        assert deleted == 0
+        assert len(populated_db.data) == 3
+
     def test_all_items_with_primary_key(self, populated_db):
         """Test retrieving all items."""
         # Get all items

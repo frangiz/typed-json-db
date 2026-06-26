@@ -459,6 +459,11 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
         Raises:
             JsonDBException: If no criteria are provided.
         """
+        # Fast-path primary-key-only deletion via the O(1) index, mirroring find().
+        # remove() already updates the index and saves.
+        if len(kwargs) == 1 and self.primary_key in kwargs:
+            return 1 if self.remove(kwargs[self.primary_key]) else 0
+
         deleted = super().delete(**kwargs)
 
         # Indices may have shifted, so rebuild the primary key index.
