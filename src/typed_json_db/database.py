@@ -230,6 +230,14 @@ class JsonDB(Generic[T]):
         """Get all items."""
         return self.data.copy()
 
+    @staticmethod
+    def _matches(item: T, criteria: Dict[str, Any]) -> bool:
+        """Return True if the item matches every field/value pair in criteria."""
+        return all(
+            hasattr(item, key) and getattr(item, key) == value
+            for key, value in criteria.items()
+        )
+
     def find(self, **kwargs: Any) -> List[T]:
         """Find items matching the given criteria."""
         if not kwargs:
@@ -238,17 +246,40 @@ class JsonDB(Generic[T]):
             )
 
         # Linear search for all criteria
-        results = []
-        for item in self.data:
-            match = True
-            for key, value in kwargs.items():
-                if not hasattr(item, key) or getattr(item, key) != value:
-                    match = False
-                    break
-            if match:
-                results.append(item)
+        return [item for item in self.data if self._matches(item, kwargs)]
 
-        return results
+    def delete(self, **kwargs: Any) -> int:
+        """
+        Delete all items matching the given criteria.
+
+        Args:
+            **kwargs: Field/value pairs an item must match to be deleted.
+
+        Returns:
+            The number of items deleted.
+
+        Raises:
+            JsonDBException: If no criteria are provided.
+        """
+        if not kwargs:
+            raise JsonDBException(
+                "delete() requires at least one criterion to avoid accidentally "
+                "deleting all items."
+            )
+
+        kept: List[T] = []
+        deleted = 0
+        for item in self.data:
+            if self._matches(item, kwargs):
+                deleted += 1
+            else:
+                kept.append(item)
+
+        if deleted:
+            self.data = kept
+            self.save()
+
+        return deleted
 
     def add(self, item: T) -> T:
         """
@@ -414,6 +445,32 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
                 return item
 
         raise JsonDBException(f"Item with {self.primary_key}='{key_value}' not found")
+
+    def delete(self, **kwargs: Any) -> int:
+        """
+        Delete all items matching the given criteria.
+
+        Args:
+            **kwargs: Field/value pairs an item must match to be deleted.
+
+        Returns:
+            The number of items deleted.
+
+        Raises:
+            JsonDBException: If no criteria are provided.
+        """
+        # Fast-path primary-key-only deletion via the O(1) index, mirroring find().
+        # remove() already updates the index and saves.
+        if len(kwargs) == 1 and self.primary_key in kwargs:
+            return 1 if self.remove(kwargs[self.primary_key]) else 0
+
+        deleted = super().delete(**kwargs)
+
+        # Indices may have shifted, so rebuild the primary key index.
+        if deleted:
+            self._rebuild_primary_key_index()
+
+        return deleted
 
     def remove(self, key_value: PK) -> bool:
         """Remove an item by primary key value."""
