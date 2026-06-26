@@ -230,6 +230,14 @@ class JsonDB(Generic[T]):
         """Get all items."""
         return self.data.copy()
 
+    @staticmethod
+    def _matches(item: T, criteria: Dict[str, Any]) -> bool:
+        """Return True if the item matches every field/value pair in criteria."""
+        return all(
+            hasattr(item, key) and getattr(item, key) == value
+            for key, value in criteria.items()
+        )
+
     def find(self, **kwargs: Any) -> List[T]:
         """Find items matching the given criteria."""
         if not kwargs:
@@ -238,17 +246,7 @@ class JsonDB(Generic[T]):
             )
 
         # Linear search for all criteria
-        results = []
-        for item in self.data:
-            match = True
-            for key, value in kwargs.items():
-                if not hasattr(item, key) or getattr(item, key) != value:
-                    match = False
-                    break
-            if match:
-                results.append(item)
-
-        return results
+        return [item for item in self.data if self._matches(item, kwargs)]
 
     def delete(self, **kwargs: Any) -> int:
         """
@@ -272,11 +270,7 @@ class JsonDB(Generic[T]):
         kept: List[T] = []
         deleted = 0
         for item in self.data:
-            match = all(
-                hasattr(item, key) and getattr(item, key) == value
-                for key, value in kwargs.items()
-            )
-            if match:
+            if self._matches(item, kwargs):
                 deleted += 1
             else:
                 kept.append(item)
