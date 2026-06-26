@@ -9,6 +9,7 @@ from typing import (
     Any,
     Dict,
     Generic,
+    Iterator,
     List,
     Optional,
     Type,
@@ -230,6 +231,18 @@ class JsonDB(Generic[T]):
         """Get all items."""
         return self.data.copy()
 
+    def __len__(self) -> int:
+        """Return the number of items in the database."""
+        return len(self.data)
+
+    def __iter__(self) -> Iterator[T]:
+        """Iterate over the items in the database."""
+        return iter(self.data)
+
+    def __contains__(self, item: object) -> bool:
+        """Return True if the given item is stored in the database."""
+        return item in self.data
+
     @staticmethod
     def _matches(item: T, criteria: Dict[str, Any]) -> bool:
         """Return True if the item matches every field/value pair in criteria."""
@@ -247,6 +260,22 @@ class JsonDB(Generic[T]):
 
         # Linear search for all criteria
         return [item for item in self.data if self._matches(item, kwargs)]
+
+    def count(self, **kwargs: Any) -> int:
+        """
+        Count items, optionally filtered by criteria.
+
+        Args:
+            **kwargs: Optional field/value pairs to match. With no criteria,
+                counts all items.
+
+        Returns:
+            The number of matching items.
+        """
+        if not kwargs:
+            return len(self.data)
+
+        return sum(1 for item in self.data if self._matches(item, kwargs))
 
     def delete(self, **kwargs: Any) -> int:
         """
