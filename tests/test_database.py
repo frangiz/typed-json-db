@@ -320,6 +320,59 @@ class TestJsonDB:
         assert len(results) == 1
         assert results[0].name == "Test Item"
 
+    def test_delete_items(self, populated_db_no_pk):
+        """Test deleting items matching a single criterion."""
+        deleted = populated_db_no_pk.delete(status=ItemStatus.ACTIVE)
+
+        # All 3 items had status=ACTIVE
+        assert deleted == 3
+        assert len(populated_db_no_pk.data) == 0
+
+        # Verify the change was persisted to disk
+        with open(populated_db_no_pk.file_path, "r") as f:
+            assert json.load(f) == []
+
+    def test_delete_items_multiple_criteria(self, populated_db_no_pk):
+        """Test deleting items matching multiple criteria."""
+        deleted = populated_db_no_pk.delete(status=ItemStatus.ACTIVE, quantity=2)
+
+        # Only one item has quantity=2
+        assert deleted == 1
+        assert len(populated_db_no_pk.data) == 2
+        assert all(item.quantity != 2 for item in populated_db_no_pk.data)
+
+    def test_delete_no_matches(self, populated_db_no_pk):
+        """Test that deleting with no matches changes nothing."""
+        deleted = populated_db_no_pk.delete(status=ItemStatus.COMPLETED)
+
+        assert deleted == 0
+        assert len(populated_db_no_pk.data) == 3
+
+    def test_delete_requires_criteria(self, populated_db_no_pk):
+        """Test that delete() requires at least one criterion."""
+        with pytest.raises(JsonDBException) as exc_info:
+            populated_db_no_pk.delete()
+
+        assert "delete() requires at least one criterion" in str(exc_info.value)
+        # Nothing should have been deleted
+        assert len(populated_db_no_pk.data) == 3
+
+    def test_delete_updates_primary_key_index(self, populated_db):
+        """Test that delete() keeps the IndexedJsonDB primary key index in sync."""
+        remaining = populated_db.find(quantity=1)[0]
+        survivor_id = remaining.id
+
+        deleted = populated_db.delete(quantity=2)
+        assert deleted == 1
+
+        # The index should still resolve the survivor and not the deleted item
+        assert populated_db.get(survivor_id) is not None
+        assert populated_db.get(survivor_id).id == survivor_id
+
+        # Index entries must point at valid positions for every remaining item
+        for item in populated_db.data:
+            assert populated_db.get(item.id) is item
+
     def test_all_items_with_primary_key(self, populated_db):
         """Test retrieving all items."""
         # Get all items

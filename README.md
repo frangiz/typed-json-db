@@ -68,6 +68,7 @@ db = JsonDB(User, Path("users.json"))
 # Available operations
 db.add(item)                   # Add new items
 db.find(field=value)           # Query by any field  
+db.delete(field=value)         # Delete items matching criteria, returns count
 db.all()                       # Get all items
 db.save()                      # Manual save (auto-saves on add)
 ```
@@ -101,6 +102,7 @@ db.find(id=primary_key)        # Optimized primary key search
 ```python
 db.add(item: T) -> T                    # Add new item, auto-saves
 db.find(**kwargs) -> List[T]            # Query by any field  
+db.delete(**kwargs) -> int              # Delete matching items, returns count, auto-saves
 db.all() -> List[T]                     # Get all items
 db.save() -> None                       # Manual save
 ```
