@@ -393,6 +393,48 @@ class TestJsonDB:
         assert deleted == 0
         assert len(populated_db.data) == 3
 
+    def test_count_all(self, populated_db_no_pk):
+        """Test counting all items with no criteria."""
+        assert populated_db_no_pk.count() == 3
+
+    def test_count_empty_db(self, temp_db_path):
+        """Test counting an empty database."""
+        db = JsonDB(SampleItem, temp_db_path)
+        assert db.count() == 0
+
+    def test_count_with_criteria(self, populated_db_no_pk):
+        """Test counting items matching criteria."""
+        assert populated_db_no_pk.count(status=ItemStatus.ACTIVE) == 3
+        assert populated_db_no_pk.count(quantity=2) == 1
+        assert populated_db_no_pk.count(status=ItemStatus.COMPLETED) == 0
+
+    def test_len(self, populated_db_no_pk):
+        """Test that len() returns the number of items."""
+        assert len(populated_db_no_pk) == 3
+
+    def test_len_empty_db(self, temp_db_path):
+        """Test that len() is zero for an empty database."""
+        db = JsonDB(SampleItem, temp_db_path)
+        assert len(db) == 0
+
+    def test_iter(self, populated_db_no_pk):
+        """Test iterating over the database yields all items."""
+        items = list(populated_db_no_pk)
+        assert len(items) == 3
+        assert items == populated_db_no_pk.all()
+
+    def test_contains(self, temp_db_path, sample_item):
+        """Test membership testing with the `in` operator."""
+        db = JsonDB(SampleItem, temp_db_path)
+        db.add(sample_item)
+
+        assert sample_item in db
+
+        other = SampleItem(
+            id=uuid.uuid4(), name="Other", status=ItemStatus.ACTIVE, quantity=1
+        )
+        assert other not in db
+
     def test_all_items_with_primary_key(self, populated_db):
         """Test retrieving all items."""
         # Get all items

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New `delete(**kwargs)` method on `JsonDB` for query-based deletion, returning the number of items removed. `IndexedJsonDB` overrides it to keep the primary key index in sync.
+- New `count(**kwargs)` method on `JsonDB` returning the number of items, optionally filtered by criteria.
+- Pythonic protocol support on `JsonDB`: `len(db)`, iteration (`for item in db`), and membership testing (`item in db`).
 
 ## [0.3.1] - 2025-11-24
 

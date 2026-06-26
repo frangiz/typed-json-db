@@ -69,8 +69,14 @@ db = JsonDB(User, Path("users.json"))
 db.add(item)                   # Add new items
 db.find(field=value)           # Query by any field  
 db.delete(field=value)         # Delete items matching criteria, returns count
+db.count(field=value)          # Count items (all, or matching criteria)
 db.all()                       # Get all items
 db.save()                      # Manual save (add and delete auto-save)
+
+# Pythonic helpers
+len(db)                        # Number of items
+for item in db: ...            # Iterate over items
+item in db                     # Membership test
 ```
 
 ### IndexedJsonDB - Advanced Storage  
@@ -103,8 +109,12 @@ db.find(id=primary_key)        # Optimized primary key search
 db.add(item: T) -> T                    # Add new item, auto-saves
 db.find(**kwargs) -> List[T]            # Query by any field  
 db.delete(**kwargs) -> int              # Delete matching items, returns count, auto-saves
+db.count(**kwargs) -> int               # Count all items, or those matching criteria
 db.all() -> List[T]                     # Get all items
 db.save() -> None                       # Manual save
+len(db) -> int                          # Number of items
+iter(db) -> Iterator[T]                 # Iterate over items
+item in db -> bool                      # Membership test
 ```
 
 ### IndexedJsonDB Additional Methods
