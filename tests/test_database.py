@@ -1550,8 +1550,9 @@ class TestSaveSerializationFailure:
         """A circular reference (ValueError) must not corrupt the file either.
 
         A cycle built from plain containers cannot reach json.dumps on its own
-        because asdict() recurses into them first and hits a RecursionError, so
-        the circular structure is injected where _save() builds its payload.
+        because asdict() recurses into them first and hits a RecursionError
+        (covered by the test below), so the circular structure is injected where
+        _save() builds its payload.
         """
         circular: dict = {"name": "bad"}
         circular["self"] = circular
@@ -1565,6 +1566,25 @@ class TestSaveSerializationFailure:
         assert "Error serializing to JSON" in str(exc_info.value)
         assert isinstance(exc_info.value.__cause__, ValueError)
         monkeypatch.undo()
+        self._assert_file_intact(temp_db_path, contents_before)
+
+    def test_recursive_structure_leaves_file_intact(
+        self, temp_db_path, db_with_records
+    ):
+        """A self-referential value exhausts the stack in asdict() before json sees it.
+
+        The resulting RecursionError is wrapped too, so callers get a consistent
+        exception type no matter which layer gives up on the value.
+        """
+        recursive: list = []
+        recursive.append(recursive)
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db_with_records.add(PayloadItem(name="bad", payload=recursive))
+
+        assert "Error serializing to JSON" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, RecursionError)
         self._assert_file_intact(temp_db_path, contents_before)
 
     def test_on_disk_format_escapes_non_ascii(self, temp_db_path):

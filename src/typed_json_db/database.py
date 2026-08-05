@@ -226,7 +226,7 @@ class JsonDB(Generic[T]):
                 indent=2,
                 default=JsonSerializer.default,
             )
-        except (TypeError, ValueError, OverflowError) as e:
+        except (TypeError, ValueError, OverflowError, RecursionError) as e:
             raise JsonDBException(f"Error serializing to JSON: {e}") from e
 
         with open(self.file_path, "w", encoding="utf-8") as f:
