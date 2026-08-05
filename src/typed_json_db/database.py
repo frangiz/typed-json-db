@@ -211,13 +211,26 @@ class JsonDB(Generic[T]):
             raise JsonDBException(f"Error parsing JSON file: {e}")
 
     def _save(self, items: List[T]) -> None:
-        """Save data to the JSON file."""
+        """
+        Save data to the JSON file.
+
+        Serialization happens fully in memory before the file is opened, so an
+        item that cannot be encoded raises without truncating the existing file.
+
+        Raises:
+            JsonDBException: If any item cannot be serialized to JSON.
+        """
         try:
-            with open(self.file_path, "w") as f:
-                json_data = [asdict(item) for item in items]
-                json.dump(json_data, f, indent=2, default=JsonSerializer.default)
-        except (TypeError, OverflowError) as e:
-            raise JsonDBException(f"Error serializing to JSON: {e}")
+            payload = json.dumps(
+                [asdict(item) for item in items],
+                indent=2,
+                default=JsonSerializer.default,
+            )
+        except (TypeError, ValueError, OverflowError) as e:
+            raise JsonDBException(f"Error serializing to JSON: {e}") from e
+
+        with open(self.file_path, "w", encoding="utf-8") as f:
+            f.write(payload)
 
     def _dict_to_dataclass(self, data_dict: Dict[str, Any]) -> T:
         """Convert a dictionary to the specified dataclass."""
