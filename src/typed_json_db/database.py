@@ -555,11 +555,11 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
             ):
                 snapshot = list(self.data)
                 self.data.pop(i)
-
-                # Rebuild primary key index since indices have shifted
-                self._rebuild_primary_key_index()
-
                 self._save_or_rollback(snapshot)
+
+                # Rebuild primary key index since indices have shifted. A failed
+                # save rebuilds it from the restored items instead.
+                self._rebuild_primary_key_index()
                 return True
         return False
 

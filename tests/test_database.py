@@ -1635,7 +1635,10 @@ class TestFailedSaveRollback:
 
         # The database is not wedged: a later valid add still persists
         db.add(PayloadItem(name="later"))
-        assert [record["name"] for record in json.loads(temp_db_path.read_text())] == [
+        assert [
+            record["name"]
+            for record in json.loads(temp_db_path.read_text(encoding="utf-8"))
+        ] == [
             "kept",
             "later",
         ]
@@ -1652,7 +1655,10 @@ class TestFailedSaveRollback:
 
         # Because the key really is absent, re-adding it cannot duplicate it
         keyed_db.add(KeyedPayloadItem(id="c"))
-        assert [record["id"] for record in json.loads(temp_db_path.read_text())] == [
+        assert [
+            record["id"]
+            for record in json.loads(temp_db_path.read_text(encoding="utf-8"))
+        ] == [
             "a",
             "b",
             "c",
