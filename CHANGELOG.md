@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A save that cannot be serialized no longer corrupts the database file. Serialization now completes in memory before the file is opened, so an item the serializer cannot encode leaves the previous contents intact and readable instead of truncating the file mid-write. Circular and self-referential values now also raise `JsonDBException` rather than propagating a `ValueError` or `RecursionError`.
+- A failed save no longer leaves the in-memory data out of step with the file. `add()`, `update()`, `delete()` and `remove()` now roll back their change when it cannot be saved, so the database stays usable instead of raising on every later save, and `IndexedJsonDB` no longer keeps a key in its items while missing it from the primary key index — which allowed a duplicate primary key to be added and persisted.
 
 ## [0.4.0] - 2026-06-26
 

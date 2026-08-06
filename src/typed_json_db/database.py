@@ -240,6 +240,30 @@ class JsonDB(Generic[T]):
         """Save current data to the file."""
         self._save(self.data)
 
+    def _save_or_rollback(self, snapshot: List[T]) -> None:
+        """
+        Save current data, restoring `snapshot` if it cannot be saved.
+
+        A failed save leaves the file untouched, so the in-memory data must be
+        rewound too or the two would disagree and every later save would fail on
+        the same unserializable item.
+
+        Args:
+            snapshot: The item list to restore if the save fails.
+
+        Raises:
+            JsonDBException: If the data cannot be serialized, after rolling back.
+        """
+        try:
+            self.save()
+        except JsonDBException:
+            self.data = snapshot
+            self._after_rollback()
+            raise
+
+    def _after_rollback(self) -> None:
+        """Restore state derived from `self.data` after a rollback. No-op here."""
+
     def all(self) -> List[T]:
         """Get all items."""
         return self.data.copy()
@@ -318,8 +342,9 @@ class JsonDB(Generic[T]):
                 kept.append(item)
 
         if deleted:
+            snapshot = self.data
             self.data = kept
-            self.save()
+            self._save_or_rollback(snapshot)
 
         return deleted
 
@@ -334,7 +359,8 @@ class JsonDB(Generic[T]):
             The added item
 
         Raises:
-            JsonDBException: If the item is not of the expected type or primary key already exists
+            JsonDBException: If the item is not of the expected type, or cannot be
+                serialized, in which case the database is left unchanged.
         """
         if not isinstance(item, self.data_class):
             raise JsonDBException(
@@ -351,8 +377,9 @@ class JsonDB(Generic[T]):
         if updates:
             item = replace(item, **updates)
 
+        snapshot = list(self.data)
         self.data.append(item)
-        self.save()
+        self._save_or_rollback(snapshot)
 
         return item
 
@@ -391,6 +418,10 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
         super().__init__(data_class, file_path)
 
         # Build primary key index
+        self._rebuild_primary_key_index()
+
+    def _after_rollback(self) -> None:
+        """Rebuild the primary key index, whose positions follow `self.data`."""
         self._rebuild_primary_key_index()
 
     def get(self, key_value: PK) -> Optional[T]:
@@ -482,8 +513,9 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
                 hasattr(existing_item, self.primary_key)
                 and getattr(existing_item, self.primary_key) == key_value
             ):
+                snapshot = list(self.data)
                 self.data[i] = item
-                self.save()
+                self._save_or_rollback(snapshot)
                 return item
 
         raise JsonDBException(f"Item with {self.primary_key}='{key_value}' not found")
@@ -521,12 +553,13 @@ class IndexedJsonDB(JsonDB[T], Generic[T, PK]):
                 hasattr(item, self.primary_key)
                 and getattr(item, self.primary_key) == key_value
             ):
+                snapshot = list(self.data)
                 self.data.pop(i)
 
                 # Rebuild primary key index since indices have shifted
                 self._rebuild_primary_key_index()
 
-                self.save()
+                self._save_or_rollback(snapshot)
                 return True
         return False
 

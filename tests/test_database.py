@@ -1598,3 +1598,99 @@ class TestSaveSerializationFailure:
 
         reopened: JsonDB[PayloadItem] = JsonDB(PayloadItem, temp_db_path)
         assert reopened.all()[0].name == "Ångström ✓"
+
+
+@dataclass
+class KeyedPayloadItem:
+    """Keyed item with an untyped payload, used to trigger serialization errors."""
+
+    id: str = ""
+    payload: Optional[Any] = None
+
+
+class TestFailedSaveRollback:
+    """A failed save must rewind memory so it keeps matching the file."""
+
+    @pytest.fixture
+    def keyed_db(self, temp_db_path):
+        """An indexed database holding two keyed records."""
+        db: IndexedJsonDB[KeyedPayloadItem, str] = IndexedJsonDB(
+            KeyedPayloadItem, temp_db_path, primary_key="id"
+        )
+        db.add(KeyedPayloadItem(id="a"))
+        db.add(KeyedPayloadItem(id="b"))
+        return db
+
+    def test_failed_add_leaves_database_usable(self, temp_db_path):
+        """The rejected item is dropped from memory, so later saves still work."""
+        db: JsonDB[PayloadItem] = JsonDB(PayloadItem, temp_db_path)
+        db.add(PayloadItem(name="kept"))
+
+        with pytest.raises(JsonDBException):
+            db.add(PayloadItem(name="bad", payload=object()))
+
+        # Memory matches the file rather than holding the unsaveable item
+        assert len(db) == 1
+        assert [item.name for item in db.all()] == ["kept"]
+
+        # The database is not wedged: a later valid add still persists
+        db.add(PayloadItem(name="later"))
+        assert [record["name"] for record in json.loads(temp_db_path.read_text())] == [
+            "kept",
+            "later",
+        ]
+
+    def test_failed_add_keeps_primary_key_index_consistent(
+        self, keyed_db, temp_db_path
+    ):
+        """A rolled back add must not leave the key in data but missing from the index."""
+        with pytest.raises(JsonDBException):
+            keyed_db.add(KeyedPayloadItem(id="c", payload=object()))
+
+        assert keyed_db.get("c") is None
+        assert [item.id for item in keyed_db.all()] == ["a", "b"]
+
+        # Because the key really is absent, re-adding it cannot duplicate it
+        keyed_db.add(KeyedPayloadItem(id="c"))
+        assert [record["id"] for record in json.loads(temp_db_path.read_text())] == [
+            "a",
+            "b",
+            "c",
+        ]
+        assert keyed_db.get("c") is not None
+
+    def test_failed_update_keeps_previous_item(self, keyed_db, temp_db_path):
+        """A failed update leaves the stored item in place."""
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException):
+            keyed_db.update(KeyedPayloadItem(id="a", payload=object()))
+
+        stored = keyed_db.get("a")
+        assert stored is not None and stored.payload is None
+        assert temp_db_path.read_text(encoding="utf-8") == contents_before
+
+    def test_failed_delete_keeps_items(self, keyed_db, temp_db_path):
+        """A delete whose save fails restores the items it removed."""
+        # Stored items are handed out by reference, so this poisons the database
+        keyed_db.all()[0].payload = object()
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException):
+            keyed_db.delete(id="b")
+
+        assert [item.id for item in keyed_db.all()] == ["a", "b"]
+        assert temp_db_path.read_text(encoding="utf-8") == contents_before
+
+    def test_failed_remove_keeps_item_and_index(self, keyed_db, temp_db_path):
+        """A remove whose save fails restores both the item and its index entry."""
+        keyed_db.all()[0].payload = object()
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException):
+            keyed_db.remove("b")
+
+        assert [item.id for item in keyed_db.all()] == ["a", "b"]
+        restored = keyed_db.get("b")
+        assert restored is not None and restored.id == "b"
+        assert temp_db_path.read_text(encoding="utf-8") == contents_before
