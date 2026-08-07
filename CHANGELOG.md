@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- A save that cannot be serialized no longer corrupts the database file. Serialization now completes in memory before the file is opened, so an item the serializer cannot encode leaves the previous contents intact and readable instead of truncating the file mid-write. Circular and self-referential values now also raise `JsonDBException` rather than propagating a `ValueError` or `RecursionError`.
+
 ## [0.4.0] - 2026-06-26
 
 ### Added

@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import get_type_hints, Any
+from typing import get_type_hints, Any, Optional
 
 from src.typed_json_db import JsonDB, IndexedJsonDB, JsonDBException, JsonSerializer
+from src.typed_json_db import database as database_module
 
 
 class ItemStatus(Enum):
@@ -1490,3 +1491,110 @@ class TestTimestamped:
         # Should not have created_at or updated_at fields
         assert not hasattr(added_item, "created_at")
         assert not hasattr(added_item, "updated_at")
+
+
+@dataclass
+class PayloadItem:
+    """Item with an untyped payload field, used to trigger serialization errors."""
+
+    name: str = ""
+    payload: Optional[Any] = None
+
+
+class TestSaveSerializationFailure:
+    """A save that cannot be serialized must leave the existing file untouched."""
+
+    @pytest.fixture
+    def db_with_records(self, temp_db_path):
+        """A database file holding two records that must survive a failed save."""
+        db: JsonDB[PayloadItem] = JsonDB(PayloadItem, temp_db_path)
+        db.add(PayloadItem(name="important-record-1"))
+        db.add(PayloadItem(name="important-record-2"))
+        return db
+
+    @staticmethod
+    def _assert_file_intact(temp_db_path, contents_before):
+        """The file is unchanged, still valid JSON, and still openable."""
+        assert temp_db_path.read_text(encoding="utf-8") == contents_before
+
+        # Parseable as JSON, with both original records present
+        parsed = json.loads(contents_before)
+        assert [record["name"] for record in parsed] == [
+            "important-record-1",
+            "important-record-2",
+        ]
+
+        # A fresh database can still open the file and sees every prior record
+        reopened: JsonDB[PayloadItem] = JsonDB(PayloadItem, temp_db_path)
+        assert [item.name for item in reopened.all()] == [
+            "important-record-1",
+            "important-record-2",
+        ]
+
+    def test_unserializable_value_leaves_file_intact(
+        self, temp_db_path, db_with_records
+    ):
+        """A value the serializer cannot encode (TypeError) must not corrupt the file."""
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db_with_records.add(PayloadItem(name="bad", payload=object()))
+
+        assert "Error serializing to JSON" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, TypeError)
+        self._assert_file_intact(temp_db_path, contents_before)
+
+    def test_circular_reference_leaves_file_intact(
+        self, temp_db_path, db_with_records, monkeypatch
+    ):
+        """A circular reference (ValueError) must not corrupt the file either.
+
+        A cycle built from plain containers cannot reach json.dumps on its own
+        because asdict() recurses into them first and hits a RecursionError
+        (covered by the test below), so the circular structure is injected where
+        _save() builds its payload.
+        """
+        circular: dict = {"name": "bad"}
+        circular["self"] = circular
+        monkeypatch.setattr(database_module, "asdict", lambda item: circular)
+
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db_with_records.save()
+
+        assert "Error serializing to JSON" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, ValueError)
+        monkeypatch.undo()
+        self._assert_file_intact(temp_db_path, contents_before)
+
+    def test_recursive_structure_leaves_file_intact(
+        self, temp_db_path, db_with_records
+    ):
+        """A self-referential value exhausts the stack in asdict() before json sees it.
+
+        The resulting RecursionError is wrapped too, so callers get a consistent
+        exception type no matter which layer gives up on the value.
+        """
+        recursive: list = []
+        recursive.append(recursive)
+        contents_before = temp_db_path.read_text(encoding="utf-8")
+
+        with pytest.raises(JsonDBException) as exc_info:
+            db_with_records.add(PayloadItem(name="bad", payload=recursive))
+
+        assert "Error serializing to JSON" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, RecursionError)
+        self._assert_file_intact(temp_db_path, contents_before)
+
+    def test_on_disk_format_escapes_non_ascii(self, temp_db_path):
+        """Successful saves keep the previous ASCII-escaped on-disk format."""
+        db: JsonDB[PayloadItem] = JsonDB(PayloadItem, temp_db_path)
+        db.add(PayloadItem(name="Ångström ✓"))
+
+        raw = temp_db_path.read_bytes()
+        assert raw.isascii()
+        assert b"\\u00c5ngstr\\u00f6m" in raw
+
+        reopened: JsonDB[PayloadItem] = JsonDB(PayloadItem, temp_db_path)
+        assert reopened.all()[0].name == "Ångström ✓"
