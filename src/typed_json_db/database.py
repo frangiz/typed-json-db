@@ -242,17 +242,22 @@ class JsonDB(Generic[T]):
 
     def _save_or_rollback(self, snapshot: List[T]) -> None:
         """
-        Save current data, restoring `snapshot` if it cannot be saved.
+        Save current data, restoring `snapshot` if serialization fails.
 
-        A failed save leaves the file untouched, so the in-memory data must be
-        rewound too or the two would disagree and every later save would fail on
-        the same unserializable item.
+        Serialization leaves the file untouched when it fails, so the in-memory
+        data must be rewound too or the two would disagree and every later save
+        would fail on the same unserializable item.
+
+        Only serialization failures roll back. An I/O error while writing
+        propagates as-is, leaving `self.data` modified, because the file may
+        already be partially written and no in-memory state matches it.
 
         Args:
-            snapshot: The item list to restore if the save fails.
+            snapshot: The item list to restore if serialization fails.
 
         Raises:
             JsonDBException: If the data cannot be serialized, after rolling back.
+            OSError: If the file cannot be written, without rolling back.
         """
         try:
             self.save()
