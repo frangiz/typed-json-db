@@ -3,7 +3,8 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # "uv", not "pip": it updates uv.lock along with the pins in pyproject.toml
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
